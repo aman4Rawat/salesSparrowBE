@@ -11,18 +11,24 @@ const Admin = mongoose.model("AdminInfo");
 const Lead = mongoose.model("Lead");
 const Banner = mongoose.model("Banner");
 const Mapping = mongoose.model("Mapping");
+const SharedMedia = mongoose.model("SharedMedia");
 const Route = mongoose.model("Route");
 const LeadGroup = mongoose.model("LeadGroup");
 const Message = mongoose.model("Message");
-const Leadfollow = mongoose.model("leadfollow");
+// const Leadfollow = mongoose.model("leadfollow");
+const LeadFollowUp = mongoose.model("FollowUp");
 const LeadGroupItem = mongoose.model("LeadGroupItem");
 const Role = mongoose.model("role");
+const CustomerType = mongoose.model("CustomerType");
 const Party = mongoose.model("Party");
-const base_url = "https://webservice.salesparrow.in/";
+const getBaseUrl = require("../../superadmin/utils/getBaseUrl");
 const Retailer = mongoose.model("Retailer");
 const Beat = mongoose.model("Beat");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
+const sharp = require("sharp");
+
+const errorHandler = require("../../utils/errorResponse");
 
 const multer = require("multer");
 const fs = require("fs");
@@ -79,151 +85,140 @@ const getDecodedToken = async (authHeader) => {
   }
 };
 
-router.post("/lead_list", async (req, res) => {
-  var token = req.get("Authorization") ? req.get("Authorization") : "";
-  var lead_id = req.body.lead_id ? req.body.lead_id : "";
-  var search = req.body.search ? req.body.search : "";
-  var state = req.body.state ? req.body.state : "";
-  var leadSource = req.body.leadSource ? req.body.leadSource : "";
-  var lead_stage = req.body.lead_stage ? req.body.lead_stage : "";
-  var lead_potential = req.body.lead_potential ? req.body.lead_potential : "";
-  var customer_grp = req.body.customer_grp ? req.body.customer_grp : "";
-  var employee_id = req.body.employee_id ? req.body.employee_id : "";
-  var page = req.body.page != "" ? req.body.page : 1;
-  var limit = req.body.limit != "" ? req.body.limit : 20;
-  // var is_customer     = (req.body.is_customer != '') ? req.body.is_customer : "0";
-  if (token != "") {
-    const decoded = await getDecodedToken(token);
-    var user_id = decoded.user_id;
-    Admin.find({ _id: user_id })
-      .exec()
-      .then(async (user_info) => {
-        if (user_info.length < 1) {
-          res.status(401).json({
-            status: false,
-            message: "User not found !",
-            results: null,
-          });
-        } else {
-          var list1 = [];
-          var condition = {};
-          condition.is_delete = "0";
-          // condition.is_customer = is_customer;
-          if (search != "") {
-            var regex = new RegExp(search, "i");
-            condition.leadName = regex;
-          }
-          if (state != "") {
-            condition.state = state;
-          }
-          if (lead_potential != "") {
-            condition.lead_potential = lead_potential;
-          }
-          if (customer_grp != "") {
-            condition.customer_grp = customer_grp;
-          }
-          if (employee_id != "") {
-            condition.assignToEmp = employee_id;
-          }
-          if (leadSource != "") {
-            condition.leadSource = leadSource;
-          }
-          if (lead_stage != "") {
-            condition.lead_stage = lead_stage;
-          }
-          if (lead_id != "") {
-            condition._id = lead_id;
-          }
-          Lead.find(condition)
-            .limit(limit * 1)
-            .skip((page - 1) * limit)
-            .sort({ _id: -1 })
-            .exec()
-            .then(async (lead_data) => {
-              if (lead_data.length > 0) {
-                let counInfo = 0;
-                for (let i = 0; i < lead_data.length; i++) {
-                  await (async function (rowData) {
-                    if (rowData.state != "") {
-                      var state_data = await Location.findOne({
-                        _id: rowData.state,
-                      });
-                      var sate_name = state_data.name;
-                    } else {
-                      var sate_name = "";
-                    }
-                    if (rowData.city != "") {
-                      var city_data = await Location.findOne({
-                        _id: rowData.city,
-                      });
-                      var city_name = city_data.name;
-                    } else {
-                      var city_name = "";
-                    }
-                    if (rowData.assignToEmp != "") {
-                      var emp_data = await Employee.findOne({
-                        _id: rowData.assignToEmp,
-                      });
-                      var emp_name = emp_data.employeeName;
-                    } else {
-                      var emp_name = "";
-                    }
-                    var leadfollow_data = await Leadfollow.findOne({
-                      lead_id: rowData._id,
-                    });
-                    var u_data = {
-                      _id: rowData._id,
-                      admin_id: rowData.admin_id,
-                      leadName: rowData.leadName,
-                      displayName: rowData.displayName,
-                      mobileNumber: rowData.mobileNumber,
-                      email: rowData.email,
-                      pincode: rowData.pincode,
-                      state: rowData.state,
-                      last_follow_date: leadfollow_data
-                        ? leadfollow_data.Created_date
-                        : "",
-                      sate_name: sate_name ?? "",
-                      city_name: city_name ?? "",
-                      emp_name: emp_name ?? "",
-                      city: rowData.city,
-                      leadSource: rowData.leadSource,
-                      addBy: rowData.addBy,
-                      note: rowData.note,
-                      assignToEmp: rowData.assignToEmp,
-                      Created_date: rowData.Created_date,
-                      Updated_date: rowData.Updated_date,
-                      is_delete: rowData.is_delete,
-                      status: rowData.status,
-                    };
-                    list1.push(u_data);
-                  })(lead_data[i]);
-                  counInfo++;
-                  if (counInfo == lead_data.length) {
-                    res.status(200).json({
-                      status: true,
-                      message: "List successfully",
-                      results: list1,
-                    });
-                  }
-                }
-              } else {
-                res.status(200).json({
-                  status: true,
-                  message: "Not Available !",
-                  results: list1,
-                });
-              }
-            });
+router.post("/lead_list", protectTo, async (req, res) => {
+  const {
+    lead_id = "",
+    search = "",
+    state = "",
+    leadSource = "",
+    lead_stage = "",
+    lead_potential = "",
+    customer_grp = "",
+    employee_id = "",
+    page = 1,
+    limit = 20,
+  } = req.body;
+  var user_id = req.loggedInUser.user_id;
+  Admin.find({ _id: user_id })
+    .exec()
+    .then(async (user_info) => {
+      if (user_info.length < 1) {
+        res.status(401).json({
+          status: false,
+          message: "User not found !",
+          results: null,
+        });
+      } else {
+        var list1 = [];
+        var condition = {};
+        condition.is_delete = "0";
+        // condition.is_customer = is_customer;
+        if (search != "") {
+          var regex = new RegExp(search, "i");
+          condition.leadName = regex;
         }
-      });
-  } else {
-    return res.json({
-      status: false,
-      message: "token require !",
-      results: null,
+        if (state != "") {
+          condition.state = state;
+        }
+        if (lead_potential != "") {
+          condition.lead_potential = lead_potential;
+        }
+        if (customer_grp != "") {
+          condition.customer_grp = customer_grp;
+        }
+        if (employee_id != "") {
+          condition.assignToEmp = employee_id;
+        }
+        if (leadSource != "") {
+          condition.leadSource = leadSource;
+        }
+        if (lead_stage != "") {
+          condition.lead_stage = lead_stage;
+        }
+        if (lead_id != "") {
+          condition._id = lead_id;
+        }
+        Lead.find(condition)
+          .limit(limit * 1)
+          .skip((page - 1) * limit)
+          .sort({ _id: -1 })
+          .exec()
+          .then(async (lead_data) => {
+            if (lead_data.length > 0) {
+              let counInfo = 0;
+              for (let i = 0; i < lead_data.length; i++) {
+                await (async function (rowData) {
+                  if (rowData.state != "") {
+                    var state_data = await Location.findOne({
+                      id: rowData.state,
+                    });
+                    var sate_name = state_data.name;
+                  } else {
+                    var sate_name = "";
+                  }
+                  if (rowData.city != "") {
+                    var city_data = await Location.findOne({
+                      id: rowData.city,
+                    });
+                    var city_name = city_data.name;
+                  } else {
+                    var city_name = "";
+                  }
+                  if (rowData.assignToEmp != "") {
+                    var emp_data = await Employee.findById(rowData.assignToEmp);
+                    var emp_name = emp_data.employeeName;
+                  } else {
+                    var emp_name = "";
+                  }
+                  var leadfollow_data = await LeadFollowUp.findOne({
+                    lead_id: rowData._id,
+                  });
+                  var u_data = {
+                    _id: rowData._id,
+                    admin_id: rowData.admin_id,
+                    leadName: rowData.leadName,
+                    displayName: rowData.displayName,
+                    mobileNumber: rowData.mobileNumber,
+                    email: rowData.email,
+                    pincode: rowData.pincode,
+                    state: rowData.state,
+                    last_follow_date: leadfollow_data
+                      ? leadfollow_data.Created_date
+                      : "",
+                    sate_name: sate_name ?? "",
+                    city_name: city_name ?? "",
+                    emp_name: emp_name ?? "",
+                    city: rowData.city,
+                    leadSource: rowData.leadSource,
+                    addBy: rowData.addBy,
+                    note: rowData.note,
+                    assignToEmp: rowData.assignToEmp,
+                    Created_date: rowData.Created_date,
+                    Updated_date: rowData.Updated_date,
+                    is_delete: rowData.is_delete,
+                    status: rowData.status,
+                  };
+                  list1.push(u_data);
+                })(lead_data[i]);
+                counInfo++;
+                if (counInfo == lead_data.length) {
+                  res.status(200).json({
+                    status: true,
+                    message: "List successfully",
+                    results: list1,
+                  });
+                }
+              }
+            } else {
+              res.status(200).json({
+                status: true,
+                message: "Not Available !",
+                results: list1,
+              });
+            }
+          });
+      }
     });
-  }
 });
 
 // Update lead  --  Pravas Chandra Nayak - 13-01-2023
@@ -371,7 +366,7 @@ router.post(
                 user_data.date = date;
               }
               if (req.files.file) {
-                user_data.file = base_url + req.files.file[0].path;
+                user_data.file = getBaseUrl() + req.files.file[0].path;
               }
               if (status != "") {
                 user_data.status = status;
@@ -439,7 +434,7 @@ router.post("/add_LeadGroupData", async (req, res) => {
             } else {
               LeadGroupData.deleteMany(
                 { group_id: group_id },
-                (err, obj) => { }
+                (err, obj) => {}
               );
               var lead_id_array = lead_id.split(",");
               for (let i = 0; i < lead_id_array.length; i++) {
@@ -654,239 +649,6 @@ router.post("/update_lead_group", async (req, res) => {
       return res.json({
         status: false,
         message: "leadgroup_id require !",
-        results: null,
-      });
-    }
-  } else {
-    return res.json({
-      status: false,
-      message: "token require !",
-      results: null,
-    });
-  }
-});
-
-router.post("/add_leadfollowup", async (req, res) => {
-  var token = req.get("Authorization") ? req.get("Authorization") : "";
-  var lead_id = req.body.lead_id ? req.body.lead_id : "";
-  var phone_call = req.body.phone_call ? req.body.phone_call : "";
-  var message = req.body.message ? req.body.message : "";
-  var meeting = req.body.meeting ? req.body.meeting : "";
-  var note = req.body.note ? req.body.note : "";
-  if (token != "") {
-    if (lead_id != "") {
-      const decoded = await getDecodedToken(token);
-      var user_id = decoded.user_id;
-      Admin.find({ _id: user_id })
-        .exec()
-        .then(async (user_info) => {
-          if (user_info.length < 1) {
-            res.status(401).json({
-              status: false,
-              message: "User not found !",
-              results: null,
-            });
-          } else {
-            var user_data = new Leadfollow();
-            user_data.admin_id = user_id;
-            user_data.phone_call = phone_call;
-            user_data.message = message;
-            user_data.meeting = meeting;
-            user_data.note = note;
-            user_data.lead_id = lead_id;
-            user_data.Created_date = get_current_date();
-            user_data.status = "Active";
-            user_data.save((err1, doc) => {
-              if (doc) {
-                res.status(200).json({
-                  status: true,
-                  message: "Add successfully",
-                  results: doc,
-                });
-              } else {
-                res.status(200).json({
-                  status: true,
-                  message: "Add error !",
-                  results: null,
-                });
-              }
-            });
-          }
-        });
-    } else {
-      return res.json({
-        status: false,
-        message: "lead_id require !",
-        results: null,
-      });
-    }
-  } else {
-    return res.json({
-      status: false,
-      message: "token require !",
-      results: null,
-    });
-  }
-});
-
-router.post("/leadfollowup_list", async (req, res) => {
-  var token = req.get("Authorization") ? req.get("Authorization") : "";
-  var search = req.body.search ? req.body.search : "";
-  var lead_id = req.body.lead_id ? req.body.lead_id : "";
-  var page = req.body.page != "" ? req.body.page : 1;
-  var limit = req.body.limit != "" ? req.body.limit : 20;
-  if (token != "") {
-    if (lead_id != "") {
-      const decoded = await getDecodedToken(token);
-      var user_id = decoded.user_id;
-      Admin.find({ _id: user_id })
-        .exec()
-        .then(async (user_info) => {
-          if (user_info.length < 1) {
-            res.status(401).json({
-              status: false,
-              message: "User not found !",
-              results: null,
-            });
-          } else {
-            var list1 = [];
-            var condition = {};
-            condition.is_delete = "0";
-            condition.lead_id = lead_id;
-            if (search != "") {
-              var regex = new RegExp(search, "i");
-              condition.name = regex;
-            }
-            Leadfollow.find(condition)
-              .limit(limit * 1)
-              .skip((page - 1) * limit)
-              .sort({ _id: -1 })
-              .exec()
-              .then(async (lead_g_data) => {
-                if (lead_g_data.length > 0) {
-                  let counInfo = 0;
-                  for (let i = 0; i < lead_g_data.length; i++) {
-                    await (async function (rowData) {
-                      var u_data = {
-                        _id: rowData._id,
-                        admin_id: rowData.admin_id,
-                        lead_id: rowData.lead_id,
-                        phone_call: rowData.phone_call,
-                        message: rowData.message,
-                        meeting: rowData.meeting,
-                        note: rowData.note,
-                        Created_date: rowData.Created_date,
-                        Updated_date: rowData.Updated_date,
-                        is_delete: rowData.is_delete,
-                        status: rowData.status,
-                      };
-                      list1.push(u_data);
-                    })(lead_g_data[i]);
-                    counInfo++;
-                    if (counInfo == lead_g_data.length) {
-                      res.status(200).json({
-                        status: true,
-                        message: "List successfully",
-                        results: list1,
-                      });
-                    }
-                  }
-                } else {
-                  res.status(200).json({
-                    status: true,
-                    message: "Not Available !",
-                    results: list1,
-                  });
-                }
-              });
-          }
-        });
-    } else {
-      return res.json({
-        status: false,
-        message: "lead_id require !",
-        results: null,
-      });
-    }
-  } else {
-    return res.json({
-      status: false,
-      message: "token require !",
-      results: null,
-    });
-  }
-});
-
-router.post("/update_lead_followup", async (req, res) => {
-  var token = req.get("Authorization") ? req.get("Authorization") : "";
-  var phone_call = req.body.phone_call ? req.body.phone_call : "";
-  var message = req.body.message ? req.body.message : "";
-  var meeting = req.body.meeting ? req.body.meeting : "";
-  var note = req.body.note ? req.body.note : "";
-  var status = req.body.status ? req.body.status : "";
-  var leadfollow_id = req.body.leadfollow_id ? req.body.leadfollow_id : "";
-  var is_delete = req.body.is_delete ? req.body.is_delete : "";
-  if (token != "") {
-    if (leadfollow_id != "") {
-      const decoded = await getDecodedToken(token);
-      var user_id = decoded.user_id;
-      Admin.find({ _id: user_id })
-        .exec()
-        .then(async (user_info) => {
-          if (user_info.length < 1) {
-            res.status(401).json({
-              status: false,
-              message: "User not found !",
-              results: null,
-            });
-          } else {
-            var user_data = {};
-            user_data.admin_id = user_id;
-            user_data.Updated_date = get_current_date();
-            if (phone_call != "") {
-              user_data.phone_call = phone_call;
-            }
-            if (message != "") {
-              user_data.message = message;
-            }
-            if (meeting != "") {
-              user_data.meeting = meeting;
-            }
-            if (note != "") {
-              user_data.note = note;
-            }
-            if (status != "") {
-              user_data.status = status;
-            }
-            if (is_delete != "") {
-              user_data.is_delete = is_delete;
-            }
-            Leadfollow.findOneAndUpdate(
-              { _id: leadfollow_id },
-              user_data,
-              { new: true },
-              (err, doc) => {
-                if (doc) {
-                  res.status(200).json({
-                    status: true,
-                    message: "Update successfully",
-                    results: doc,
-                  });
-                } else {
-                  res.status(200).json({
-                    status: true,
-                    message: "Update error !",
-                    results: null,
-                  });
-                }
-              }
-            );
-          }
-        });
-    } else {
-      return res.json({
-        status: false,
-        message: "leadfollow_id require !",
         results: null,
       });
     }
@@ -1331,411 +1093,6 @@ router.post("/get_clients", async (req, res) => {
   if (token != "") {
     const decoded = await getDecodedToken(token);
     let user_id = decoded.user_id;
-    Admin.findById(user_id).exec().then(async (user_info) => {
-      if (user_info.length < 1) {
-        res.status(401).json({ status: false, message: "User not found !", results: null, });
-      } else {
-        if (type == "customers") {
-          let sub_type = req.body.sub_type ? req.body.sub_type : "";
-          if (sub_type == "retailers") {
-            let employee_id = req.body.employee_id
-              ? req.body.employee_id
-              : "";
-            let beat_id = req.body.beat_id ? req.body.beat_id : "";
-            let condition = {};
-            condition.company_id = user_id;
-            if (status != "") {
-              condition.status = status;
-            }
-            if (employee_id != "") {
-              condition.employee_id = employee_id;
-              if (beat_id == "") {
-                let list = [];
-                let retailer_data = await Retailer.find(condition)
-                  .limit(limit * 1)
-                  .skip((page - 1) * limit);
-                let total_retailer_data = await Retailer.find(condition);
-                let count = total_retailer_data.length;
-                for (let i = 0; i < retailer_data.length; i++) {
-                  let route_data = Route.findOne({
-                    _id: retailer_data[i].route_id,
-                  });
-                  let city_data = Location.findOne({ id: route_data.city });
-                  let beat_data = await Beat.find({ company_id: user_id });
-                  let x = "";
-                  for (let j = 0; j < beat_data.length; j++) {
-                    if (beat_data[j].route.length > 0) {
-                      for (let k = 0; k < beat_data[j].route.length; k++) {
-                        if (
-                          beat_data[j].route[k] == retailer_data[i].route_id
-                        ) {
-                          x = beat_data[j].beatName;
-                          break;
-                        }
-                      }
-                    }
-                    if (x != "") {
-                      break;
-                    }
-                  }
-                  let u_data = {
-                    customer_name: retailer_data[i].customerName,
-                    city: city_data.name,
-                    beat_name: x,
-                    mobile_number: retailer_data[i].mobileNo,
-                    status: retailer_data[i].status,
-                  };
-                  list.push(u_data);
-                }
-                return res.json({
-                  status: true,
-                  message: "Data",
-                  result: list,
-                  page_length: Math.ceil(count / limit),
-                  total: count,
-                });
-              } else if (beat_id != "") {
-                let list = [];
-                let beat_data = await Beat.findOne({ _id: beat_id });
-                let retailer_list = [];
-                for (let i = 0; i < beat_data.route.length; i++) {
-                  let retailer_data = await Retailer.find({
-                    route_id: beat_data.route[i],
-                  });
-                  retailer_list.push(retailer_data);
-                }
-                for (let i = 0; i < retailer_list[0].length; i++) {
-                  let route_data = Route.findOne({
-                    _id: retailer_list[0][i].route_id,
-                  });
-                  let city_data = Location.findOne({ id: route_data.city });
-                  let beat_data = await Beat.find({ _id: beat_id });
-                  let u_data = {
-                    customer_name: retailer_list[0][i].customerName,
-                    city: city_data.name,
-                    beat_name: beat_data.beatName,
-                    mobile_number: retailer_list[0][i].mobileNo,
-                    status: retailer_list[0][i].status,
-                  };
-                  list.push(u_data);
-                }
-                return res.json({
-                  status: true,
-                  message: "Data",
-                  result: list,
-                  total: retailer_list[0].length,
-                  page_length: Math.ceil(retailer_list[0].length / limit),
-                });
-              }
-            } else if (employee_id == "") {
-              if (beat_id == "") {
-                let list = [];
-                let retailer_data = await Retailer.find(condition)
-                  .limit(limit * 1)
-                  .skip((page - 1) * limit);
-                let total_retailer_data = await Retailer.find(condition);
-                let count = total_retailer_data.length;
-                for (let i = 0; i < retailer_data.length; i++) {
-                  let route_data = Route.findOne({
-                    _id: retailer_data[i].route_id,
-                  });
-                  let city_data = Location.findOne({ id: route_data.city });
-                  let beat_data = await Beat.find({ company_id: user_id });
-                  let x = "";
-                  for (let j = 0; j < beat_data.length; j++) {
-                    if (beat_data[j].route.length > 0) {
-                      for (let k = 0; k < beat_data[j].route.length; k++) {
-                        if (
-                          beat_data[j].route[k] == retailer_data[i].route_id
-                        ) {
-                          x = beat_data[j].beatName;
-                          break;
-                        }
-                      }
-                    }
-                    if (x != "") {
-                      break;
-                    }
-                  }
-                  let u_data = {
-                    customer_name: retailer_data[i].customerName,
-                    city: city_data.name,
-                    beat_name: x,
-                    mobile_number: retailer_data[i].mobileNo,
-                    status: retailer_data[i].status,
-                  };
-                  list.push(u_data);
-                }
-                return res.json({
-                  status: true,
-                  message: "Data",
-                  result: list,
-                  page_length: Math.ceil(count / limit),
-                  total: count,
-                });
-              } else if (beat_id != "") {
-                let list = [];
-                let beat_data = await Beat.findOne({ _id: beat_id });
-                let retailer_list = [];
-                for (let i = 0; i < beat_data.route.length; i++) {
-                  let retailer_data = await Retailer.find({
-                    route_id: beat_data.route[i],
-                  });
-                  retailer_list.push(retailer_data);
-                }
-                console.log("retailer_list", retailer_list);
-                for (let i = 0; i < retailer_list[0].length; i++) {
-                  let route_data = Route.findOne({
-                    _id: retailer_list[0][i].route_id,
-                  });
-                  let city_data = Location.findOne({ id: route_data.city });
-                  let beat_data = await Beat.findOne({ _id: beat_id });
-                  let u_data = {
-                    customer_name: retailer_list[0][i].customerName,
-                    city: city_data.name,
-                    beat_name: beat_data.beatName,
-                    mobile_number: retailer_list[0][i].mobileNo,
-                    status: retailer_list[0][i].status,
-                  };
-                  list.push(u_data);
-                }
-                return res.json({
-                  status: true,
-                  message: "Data",
-                  result: list,
-                  total: retailer_list[0].length,
-                  page_length: Math.ceil(retailer_list[0].length / limit),
-                });
-              }
-            }
-          } else if (sub_type == "parties") {
-            let condition = {};
-            condition.company_id = user_id;
-            let party_type = req.body.party_type ? req.body.party_type : "";
-            let status = req.body.status ? req.body.status : "";
-            let state = req.body.state ? req.body.state : "";
-            if (party_type != "") {
-              condition.partyType = party_type;
-            }
-            if (state != "") {
-              condition.state = state;
-            }
-            if (status != "") {
-              condition.status = status;
-            }
-            let party_data = await Party.find(condition)
-              .limit(limit * 1)
-              .skip((page - 1) * limit);
-            let total_party_data = await Party.find(condition);
-            let count = total_party_data.length;
-            let list = [];
-            for (let i = 0; i < party_data.length; i++) {
-              let city_data = await Location.findOne({
-                id: party_data[i].city,
-              });
-              let u_data = {
-                party_name: party_data[i].firmName,
-                city: city_data.name,
-                mobile_number: party_data[i].mobileNo,
-                status: party_data[i].status,
-              };
-              list.push(u_data);
-            }
-            return res.json({
-              status: true,
-              message: "Data",
-              result: list,
-              page_length: Math.ceil(count / limit),
-              total: count,
-            });
-          } else {
-            return res.json({
-              status: false,
-              message: "Please provide sub type",
-            });
-          }
-        } else if (type == "leads") {
-          let lead_stage = req.body.lead_stage ? req.body.lead_stage : "";
-          let lead_potential = req.body.lead_potential
-            ? req.body.lead_potential
-            : "";
-          let leadSource = req.body.leadSource ? req.body.leadSource : "";
-          let customer_grp = req.body.customer_grp
-            ? req.body.customer_grp
-            : "";
-          let search = req.body.search ? req.body.search : "";
-          let status = req.body.status ? req.body.status : "";
-          let state = req.body.state ? req.body.state : "";
-          let employee_id = req.body.employee_id ? req.body.employee_id : "";
-          var list1 = [];
-          var condition = {};
-          condition.is_delete = "0";
-          if (search != "") {
-            var regex = new RegExp(search, "i");
-            condition.leadName = regex;
-          }
-          if (state != "") {
-            condition.state = state;
-          }
-          if (status != "") {
-            condition.status = status;
-          }
-          if (lead_potential != "") {
-            condition.lead_potential = lead_potential;
-          }
-          if (customer_grp != "") {
-            condition.customer_grp = customer_grp;
-          }
-          if (employee_id != "") {
-            condition.assignToEmp = employee_id;
-          }
-          if (leadSource != "") {
-            condition.leadSource = leadSource;
-          }
-          if (lead_stage != "") {
-            condition.lead_stage = lead_stage;
-          }
-          let lead_data = await Lead.find(condition)
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
-          let total_lead_data = await Lead.find(condition);
-          // let count = total_lead_data.length;
-          if (lead_data.length < 1)
-            return res.status(200).json({
-              status: true,
-              message: "Not Available !",
-              result: list1,
-            });
-          let list = [];
-          for (let i = 0; i < lead_data.length; i++) {
-
-            let state_data = await Location.findOne({ id: lead_data[i].state });
-            let emp_data = await Employee.findById(lead_data[i].assignToEmp)
-            let lead_grp_data = await LeadGroup.findById(lead_data[i].customer_grp);
-            var leadfollow_data = await Leadfollow.findById(lead_data[i]._id);
-            var u_data = {
-              _id: lead_data[i]._id,
-              company_id: lead_data[i].company_id,
-              leadName: lead_data[i].leadName,
-              mobileNumber: lead_data[i].mobileNumber,
-              state: {
-                id: lead_data[i].state,
-                name: state_data ? state_data.name : "",
-              },
-              leadSource: lead_data[i].leadSource,
-              assignToEmp: emp_data.employeeName,
-              lead_potential: lead_data[i].lead_potential,
-              lead_stage: lead_data[i].lead_stage,
-              lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
-              last_follow_date: leadfollow_data
-                ? leadfollow_data.Created_date
-                : "NA",
-              displayName: lead_data[i].displayName,
-              email: lead_data[i].email,
-              pincode: lead_data[i].pincode,
-              currency: lead_data[i].currency,
-              note: lead_data[i].note,
-            };
-            list.push(u_data);
-          }
-          return res.json({
-            status: true,
-            message: "Data",
-            result: list,
-            page_length: Math.ceil(lead_data.length / limit),
-            total: lead_data.length,
-          });
-        } else if (type == "groups") {
-          let list = [];
-          let date = get_current_date().split(" ")[0];
-          let new_lead_data = await Lead.find({
-            company_id: user_id,
-            is_delete: "0",
-            date: date,
-          });
-          let new_leads = new_lead_data.length;
-          let grp_data = await LeadGroup.find({
-            company_id: user_id,
-            is_delete: "0",
-          })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
-          let total_grp_data = await LeadGroup.find({
-            company_id: user_id,
-            is_delete: "0",
-          });
-          let count = total_grp_data.length;
-          for (let i = 0; i < grp_data.length; i++) {
-            let leads_count = await LeadGroupItem.find({
-              grp_id: grp_data[i]._id,
-            });
-            let u_data = {
-              lead_grp_name: grp_data[i].grp_name,
-              id: grp_data[i]._id,
-              // lead_arr:leads_count?leads_count:[],
-              lead_grp_color: grp_data[i].colour,
-              leads: leads_count.length,
-            };
-            list.push(u_data);
-          }
-          // list.push({new_leads:new_leads})
-          return res.json({
-            status: true,
-            message: "Data",
-            result: list,
-            new_leads: new_leads,
-            page_length: Math.ceil(count / limit),
-            total: count,
-          });
-        } else if (type == "teams") {
-          let list = [];
-          let emp_data = await Employee.find({
-            companyId: user_id,
-            is_delete: "0",
-          })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
-          let total_emp_data = await Employee.find({
-            companyId: user_id,
-            is_delete: "0",
-          });
-          let count = total_emp_data.length;
-          for (let i = 0; i < emp_data.length; i++) {
-            let state_data = await Location.findOne({
-              id: emp_data[i].headquarterState,
-            });
-            let role_data = await Role.findOne({ _id: emp_data[i].roleId });
-            let u_data = {
-              emp_name: emp_data[i].employeeName,
-              emp_id: emp_data[i]._id,
-              designation: role_data ? role_data.rolename : "NA",
-              state: state_data.name,
-            };
-            list.push(u_data);
-          }
-          return res.json({
-            status: true,
-            message: "Data",
-            result: list,
-            page_length: Math.ceil(count / limit),
-            total: count,
-          });
-        }
-      }
-    });
-  } else {
-    res.json({ status: false, message: "Token required!" });
-  }
-});
-
-router.post("/add_lead_banner", imageUpload.fields([{ name: "file" }]), async (req, res) => {
-  var token = req.get("Authorization") ? req.get("Authorization") : "";
-  var type = req.body.type ? req.body.type : "";
-  var name = req.body.name ? req.body.name : "";
-  var date = req.body.date ? req.body.date : "";
-  if (token != "") {
-    const decoded = await getDecodedToken(token);
-    var user_id = decoded.user_id;
     Admin.find({ _id: user_id })
       .exec()
       .then(async (user_info) => {
@@ -1746,42 +1103,461 @@ router.post("/add_lead_banner", imageUpload.fields([{ name: "file" }]), async (r
             results: null,
           });
         } else {
-          var user_data = new LeadBanner();
-          user_data.company_id = user_id;
-          user_data.type = type;
-          user_data.name = name;
-          user_data.date = date;
-          if (req.files.file) {
-            console.log(req.files.file[0]);
-            user_data.file = base_url + req.files.file[0].path;
-          }
-          user_data.Created_date = get_current_date();
-          user_data.status = "Active";
-          user_data.save((err1, doc) => {
-            if (doc) {
-              res.status(200).json({
+          if (type == "customers") {
+            let sub_type = req.body.sub_type ? req.body.sub_type : "";
+            if (sub_type == "retailers") {
+              let employee_id = req.body.employee_id
+                ? req.body.employee_id
+                : "";
+              let beat_id = req.body.beat_id ? req.body.beat_id : "";
+              let condition = {};
+              condition.company_id = user_id;
+              if (status != "") {
+                condition.status = status;
+              }
+              if (employee_id != "") {
+                condition.employee_id = employee_id;
+                if (beat_id == "") {
+                  let list = [];
+                  let retailer_data = await Retailer.find(condition)
+                    .limit(limit * 1)
+                    .skip((page - 1) * limit);
+                  let total_retailer_data = await Retailer.find(condition);
+                  let count = total_retailer_data.length;
+                  for (let i = 0; i < retailer_data.length; i++) {
+                    let route_data = Route.findOne({
+                      _id: retailer_data[i].route_id,
+                    });
+                    let city_data = Location.findOne({ id: route_data.city });
+                    let beat_data = await Beat.find({ company_id: user_id });
+                    let x = "";
+                    for (let j = 0; j < beat_data.length; j++) {
+                      if (beat_data[j].route.length > 0) {
+                        for (let k = 0; k < beat_data[j].route.length; k++) {
+                          if (
+                            beat_data[j].route[k] == retailer_data[i].route_id
+                          ) {
+                            x = beat_data[j].beatName;
+                            break;
+                          }
+                        }
+                      }
+                      if (x != "") {
+                        break;
+                      }
+                    }
+                    let u_data = {
+                      customer_name: retailer_data[i].customerName,
+                      city: city_data.name,
+                      beat_name: x,
+                      mobile_number: retailer_data[i].mobileNo,
+                      status: retailer_data[i].status,
+                    };
+                    list.push(u_data);
+                  }
+                  return res.json({
+                    status: true,
+                    message: "Data",
+                    result: list,
+                    page_length: Math.ceil(count / limit),
+                    total: count,
+                  });
+                } else if (beat_id != "") {
+                  let list = [];
+                  let beat_data = await Beat.findOne({ _id: beat_id });
+                  let retailer_list = [];
+                  for (let i = 0; i < beat_data.route.length; i++) {
+                    let retailer_data = await Retailer.find({
+                      route_id: beat_data.route[i],
+                    });
+                    retailer_list.push(retailer_data);
+                  }
+                  for (let i = 0; i < retailer_list[0].length; i++) {
+                    let route_data = Route.findOne({
+                      _id: retailer_list[0][i].route_id,
+                    });
+                    let city_data = Location.findOne({ id: route_data.city });
+                    let beat_data = await Beat.find({ _id: beat_id });
+                    let u_data = {
+                      customer_name: retailer_list[0][i].customerName,
+                      city: city_data.name,
+                      beat_name: beat_data.beatName,
+                      mobile_number: retailer_list[0][i].mobileNo,
+                      status: retailer_list[0][i].status,
+                    };
+                    list.push(u_data);
+                  }
+                  return res.json({
+                    status: true,
+                    message: "Data",
+                    result: list,
+                    total: retailer_list[0].length,
+                    page_length: Math.ceil(retailer_list[0].length / limit),
+                  });
+                }
+              } else if (employee_id == "") {
+                if (beat_id == "") {
+                  let list = [];
+                  let retailer_data = await Retailer.find(condition)
+                    .limit(limit * 1)
+                    .skip((page - 1) * limit);
+                  let total_retailer_data = await Retailer.find(condition);
+                  let count = total_retailer_data.length;
+                  for (let i = 0; i < retailer_data.length; i++) {
+                    let route_data = Route.findOne({
+                      _id: retailer_data[i].route_id,
+                    });
+                    let city_data = Location.findOne({ id: route_data.city });
+                    let beat_data = await Beat.find({ company_id: user_id });
+                    let x = "";
+                    for (let j = 0; j < beat_data.length; j++) {
+                      if (beat_data[j].route.length > 0) {
+                        for (let k = 0; k < beat_data[j].route.length; k++) {
+                          if (
+                            beat_data[j].route[k] == retailer_data[i].route_id
+                          ) {
+                            x = beat_data[j].beatName;
+                            break;
+                          }
+                        }
+                      }
+                      if (x != "") {
+                        break;
+                      }
+                    }
+                    let u_data = {
+                      customer_name: retailer_data[i].customerName,
+                      city: city_data.name,
+                      beat_name: x,
+                      mobile_number: retailer_data[i].mobileNo,
+                      status: retailer_data[i].status,
+                    };
+                    list.push(u_data);
+                  }
+                  return res.json({
+                    status: true,
+                    message: "Data",
+                    result: list,
+                    page_length: Math.ceil(count / limit),
+                    total: count,
+                  });
+                } else if (beat_id != "") {
+                  let list = [];
+                  let beat_data = await Beat.findOne({ _id: beat_id });
+                  let retailer_list = [];
+                  for (let i = 0; i < beat_data.route.length; i++) {
+                    let retailer_data = await Retailer.find({
+                      route_id: beat_data.route[i],
+                    });
+                    retailer_list.push(retailer_data);
+                  }
+                  console.log("retailer_list", retailer_list);
+                  for (let i = 0; i < retailer_list[0].length; i++) {
+                    let route_data = Route.findOne({
+                      _id: retailer_list[0][i].route_id,
+                    });
+                    let city_data = Location.findOne({ id: route_data.city });
+                    let beat_data = await Beat.findOne({ _id: beat_id });
+                    let u_data = {
+                      customer_name: retailer_list[0][i].customerName,
+                      city: city_data.name,
+                      beat_name: beat_data.beatName,
+                      mobile_number: retailer_list[0][i].mobileNo,
+                      status: retailer_list[0][i].status,
+                    };
+                    list.push(u_data);
+                  }
+                  return res.json({
+                    status: true,
+                    message: "Data",
+                    result: list,
+                    total: retailer_list[0].length,
+                    page_length: Math.ceil(retailer_list[0].length / limit),
+                  });
+                }
+              }
+            } else if (sub_type == "parties") {
+              let condition = {};
+              condition.company_id = user_id;
+              let party_type = req.body.party_type ? req.body.party_type : "";
+              let status = req.body.status ? req.body.status : "";
+              let state = req.body.state ? req.body.state : "";
+              if (party_type != "") {
+                condition.partyType = party_type;
+              }
+              if (state != "") {
+                condition.state = state;
+              }
+              if (status != "") {
+                condition.status = status;
+              }
+              let party_data = await Party.find(condition)
+                .limit(limit * 1)
+                .skip((page - 1) * limit);
+              let total_party_data = await Party.find(condition);
+              let count = total_party_data.length;
+              let list = [];
+              for (let i = 0; i < party_data.length; i++) {
+                let city_data = await Location.findOne({
+                  id: party_data[i].city,
+                });
+                let u_data = {
+                  party_name: party_data[i].firmName,
+                  city: city_data.name,
+                  mobile_number: party_data[i].mobileNo,
+                  status: party_data[i].status,
+                };
+                list.push(u_data);
+              }
+              return res.json({
                 status: true,
-                message: "Add successfully",
-                results: doc,
+                message: "Data",
+                result: list,
+                page_length: Math.ceil(count / limit),
+                total: count,
               });
             } else {
-              res.status(200).json({
-                status: true,
-                message: "Add error !",
-                results: null,
+              return res.json({
+                status: false,
+                message: "Please provide sub type",
               });
             }
-          });
+          } else if (type == "leads") {
+            let lead_stage = req.body.lead_stage ? req.body.lead_stage : "";
+            let lead_potential = req.body.lead_potential
+              ? req.body.lead_potential
+              : "";
+            let leadSource = req.body.leadSource ? req.body.leadSource : "";
+            let customer_grp = req.body.customer_grp
+              ? req.body.customer_grp
+              : "";
+            let search = req.body.search ? req.body.search : "";
+            let status = req.body.status ? req.body.status : "";
+            let state = req.body.state ? req.body.state : "";
+            let employee_id = req.body.employee_id ? req.body.employee_id : "";
+            var list1 = [];
+            var condition = {};
+            condition.is_delete = "0";
+            if (search != "") {
+              var regex = new RegExp(search, "i");
+              condition.leadName = regex;
+            }
+            if (state != "") {
+              condition.state = state;
+            }
+            if (status != "") {
+              condition.status = status;
+            }
+            if (lead_potential != "") {
+              condition.lead_potential = lead_potential;
+            }
+            if (customer_grp != "") {
+              condition.customer_grp = customer_grp;
+            }
+            if (employee_id != "") {
+              condition.assignToEmp = employee_id;
+            }
+            if (leadSource != "") {
+              condition.leadSource = leadSource;
+            }
+            if (lead_stage != "") {
+              condition.lead_stage = lead_stage;
+            }
+            let lead_data = await Lead.find(condition)
+              .limit(limit * 1)
+              .skip((page - 1) * limit);
+            let total_lead_data = await Lead.find(condition);
+            let count = total_lead_data.length;
+            if (lead_data.length < 1)
+              return res.status(200).json({
+                status: true,
+                message: "Not Available !",
+                result: list1,
+              });
+            let list = [];
+            for (let i = 0; i < lead_data.length; i++) {
+              let state_data = await Location.findOne({
+                id: lead_data[i].state,
+              });
+              let emp_data = await Employee.findById(lead_data[i].assignToEmp);
+              let lead_grp_data = await LeadGroup.findById(
+                lead_data[i].customer_grp
+              );
+              var leadfollow_data = await LeadFollowUp.findById(
+                lead_data[i]._id
+              );
+              var u_data = {
+                _id: lead_data[i]._id,
+                company_id: lead_data[i].company_id,
+                leadName: lead_data[i].leadName,
+                mobileNumber: lead_data[i].mobileNumber,
+                state: {
+                  id: lead_data[i].state,
+                  name: state_data ? state_data.name : "",
+                },
+                leadSource: lead_data[i].leadSource,
+                assignToEmp: emp_data.employeeName,
+                lead_potential: lead_data[i].lead_potential,
+                lead_stage: lead_data[i].lead_stage,
+                lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
+                last_follow_date: leadfollow_data
+                  ? leadfollow_data.Created_date
+                  : "NA",
+                displayName: lead_data[i].displayName,
+                email: lead_data[i].email,
+                pincode: lead_data[i].pincode,
+                currency: lead_data[i].currency,
+                note: lead_data[i].note,
+              };
+              list.push(u_data);
+            }
+            return res.json({
+              status: true,
+              message: "Data",
+              result: list,
+              page_length: Math.ceil(count / limit),
+              total: count,
+            });
+          } else if (type == "groups") {
+            let list = [];
+            let date = get_current_date().split(" ")[0];
+            let new_lead_data = await Lead.find({
+              company_id: user_id,
+              is_delete: "0",
+              date: date,
+            });
+            let new_leads = new_lead_data.length;
+            let grp_data = await LeadGroup.find({
+              company_id: user_id,
+              is_delete: "0",
+            })
+              .limit(limit * 1)
+              .skip((page - 1) * limit);
+            let total_grp_data = await LeadGroup.find({
+              company_id: user_id,
+              is_delete: "0",
+            });
+            let count = total_grp_data.length;
+            for (let i = 0; i < grp_data.length; i++) {
+              let leads_count = await LeadGroupItem.find({
+                grp_id: grp_data[i]._id,
+              });
+              let u_data = {
+                lead_grp_name: grp_data[i].grp_name,
+                id: grp_data[i]._id,
+                // lead_arr:leads_count?leads_count:[],
+                lead_grp_color: grp_data[i].colour,
+                leads: leads_count.length,
+              };
+              list.push(u_data);
+            }
+            // list.push({new_leads:new_leads})
+            return res.json({
+              status: true,
+              message: "Data",
+              result: list,
+              new_leads: new_leads,
+              page_length: Math.ceil(count / limit),
+              total: count,
+            });
+          } else if (type == "teams") {
+            let list = [];
+            let emp_data = await Employee.find({
+              companyId: user_id,
+              is_delete: "0",
+            })
+              .limit(limit * 1)
+              .skip((page - 1) * limit);
+            let total_emp_data = await Employee.find({
+              companyId: user_id,
+              is_delete: "0",
+            });
+            let count = total_emp_data.length;
+            for (let i = 0; i < emp_data.length; i++) {
+              let state_data = await Location.findOne({
+                id: emp_data[i].headquarterState,
+              });
+              let role_data = await Role.findOne({ _id: emp_data[i].roleId });
+              let u_data = {
+                emp_name: emp_data[i].employeeName,
+                emp_id: emp_data[i]._id,
+                designation: role_data ? role_data.rolename : "NA",
+                state: state_data.name,
+              };
+              list.push(u_data);
+            }
+            return res.json({
+              status: true,
+              message: "Data",
+              result: list,
+              page_length: Math.ceil(count / limit),
+              total: count,
+            });
+          }
         }
       });
   } else {
-    return res.json({
-      status: false,
-      message: "token require !",
-      results: null,
-    });
+    res.json({ status: false, message: "Token required!" });
   }
-}
+});
+
+router.post(
+  "/add_lead_banner",
+  imageUpload.fields([{ name: "file" }]),
+  async (req, res) => {
+    var token = req.get("Authorization") ? req.get("Authorization") : "";
+    var type = req.body.type ? req.body.type : "";
+    var name = req.body.name ? req.body.name : "";
+    var date = req.body.date ? req.body.date : "";
+    if (token != "") {
+      const decoded = await getDecodedToken(token);
+      var user_id = decoded.user_id;
+      Admin.find({ _id: user_id })
+        .exec()
+        .then(async (user_info) => {
+          if (user_info.length < 1) {
+            res.status(401).json({
+              status: false,
+              message: "User not found !",
+              results: null,
+            });
+          } else {
+            var user_data = new LeadBanner();
+            user_data.company_id = user_id;
+            user_data.type = type;
+            user_data.name = name;
+            user_data.date = date;
+            if (req.files.file) {
+              console.log(req.files.file[0]);
+              user_data.file = getBaseUrl() + req.files.file[0].path;
+            }
+            user_data.Created_date = get_current_date();
+            user_data.status = "Active";
+            user_data.save((err1, doc) => {
+              if (doc) {
+                res.status(200).json({
+                  status: true,
+                  message: "Add successfully",
+                  results: doc,
+                });
+              } else {
+                res.status(200).json({
+                  status: true,
+                  message: "Add error !",
+                  results: null,
+                });
+              }
+            });
+          }
+        });
+    } else {
+      return res.json({
+        status: false,
+        message: "token require !",
+        results: null,
+      });
+    }
+  }
 );
 
 router.post("/leadBanner_list", async (req, res) => {
@@ -2446,40 +2222,12 @@ router.post("/assign_to_team", async (req, res) => {
   }
 });
 
-// MESSAGE SUB-MODULE
-// router.post('/add_message',async (req,res)=>{
-//   const authHeader = req.headers["authorization"];
-//     const token = authHeader && authHeader.split(" ")[1];
-//     if (!token) {
-//         return res.json({
-//         status: false,
-//         message: "Token must be provided",
-//         });
-//     }
-//     var decodedToken = jwt.verify(token, "test");
-//     var company_id = decodedToken.user_id;
-//     let title = req.body.title?req.body.title:"";
-//     let body = req.body.body?req.body.body:"";
-//     let date = get_current_date().split(" ")[0]
-//     if(body || title == "") return res.json({status:false,message:"Please give proper data"});
-//     let new_message = Message.create({
-//       title,
-//       description:body,
-//       company_id,
-//       status:"Active",
-//       date,
-//     })
-//     return res.json({status:true,message:"Message added successfully",data:new_message})
-// })
-
 router.post("/message", protectTo, async (req, res) => {
   try {
     let { title = "", body = "" } = req.body;
     title = title.trim();
     body = body.trim();
-    const decodedToken = jwt.verify(req.token, "test");
-    console.log("decodedToken", decodedToken);
-    const companyId = decodedToken.user_id;
+    const companyId = req.loggedInUser.user_id;
     const date = get_current_date().split(" ")[0];
 
     if (!body || !title) {
@@ -2512,19 +2260,6 @@ router.post("/message", protectTo, async (req, res) => {
   }
 });
 
-// router.post('/edit_message',async (req,res)=>{
-//   const { title = "" , body = ""} = req.body;
-//   let updated_message = {};
-//   if(title != ""){
-//     updated_message.title = title;
-//   }
-//   if(body != ""){
-//     updated_message.description = body;
-//   }
-//   await Message.findByIdAndUpdate({_id:id},updated_message,{new:true});
-//   return res.json({status:true,message:"Updated successfully"})
-// })
-
 router.put("/message", protectTo, async (req, res) => {
   try {
     let { title = "", body = "" } = req.body;
@@ -2556,8 +2291,7 @@ If both title and body are falsy, then the resulting updatedMessage object will 
 });
 
 router.delete("/message", protectTo, async (req, res) => {
-  const decodedToken = jwt.verify(req.token, "test");
-  const companyId = decodedToken.user_id;
+  const companyId = req.loggedInUser.user_id;
   const message_id = req.body.id || "";
   if (!message_id)
     return res.json({ status: false, message: "Please give message id" });
@@ -2576,28 +2310,9 @@ router.delete("/message", protectTo, async (req, res) => {
   return res.json({ status: true, message: "Deleted successfully" });
 });
 
-// router.post('/message_listing',async (req,res)=>{
-//   const authHeader = req.headers["authorization"]?.split(" ")[1];
-//     if (!token) {
-//       return res.json({
-//         status: false,
-//         message: "Token must be provided",
-//       });
-//     }
-//     const decodedToken = jwt.verify(token, "test");
-//     const companyId = decodedToken.user_id;
-//     const { page = "" } = req.body;
-//     const limit = 10;
-//     const message_data = await Message.find({company_id:companyId}).limit(limit*1).skip((page-1)*limit)
-//     const total_message_data = await Message.find({company_id:companyId})
-//     if(message_data.length>0) return res.json({status:true,mmessage:"No data"});
-//     return res.json({status:true,message:"Data",result:message_data,count:total_message_data.length,page_length:Math.ceil(total_message_data.length/limit)})
-// })
-
 router.get("/messages", protectTo, async (req, res) => {
   try {
-    const decodedToken = jwt.verify(req.token, "test");
-    const companyId = decodedToken.user_id;
+    const companyId = req.loggedInUser.user_id;
     const { page = 1 } = req.query;
     const limit = req.query.limit || 10;
     const skip = req.query.skip || (page - 1) * limit;
@@ -2635,8 +2350,7 @@ router.get("/messages", protectTo, async (req, res) => {
 
 router.get("/message/:id", protectTo, async (req, res) => {
   try {
-    const decodedToken = jwt.verify(req.token, "test");
-    const companyId = decodedToken.user_id;
+    const companyId = req.loggedInUser.user_id;
     const id = req.params.id;
     if (!id) {
       return res.json({
@@ -2668,34 +2382,6 @@ router.get("/message/:id", protectTo, async (req, res) => {
   }
 });
 
-// const shareMessage = async (message, phone) => {
-//   const shareUrl = `whatsapp://send?text=${encodeURIComponent(message)}&phone=${phone}`;
-
-//   try {
-//     await axios.post("/api/share-message", { shareUrl });
-//     console.log("Message shared successfully!");
-//   } catch (error) {
-//     console.error("Error sharing message:", error.message);
-//   }
-// };
-
-// // Call the function with the message and phone number you want to share with
-// const message = "Hello, this is a message to share on WhatsApp.";
-// const phone = "8787058645"; // Replace with the phone number you want to share with, including the country code.
-
-// shareMessage(message, phone);
-
-// router.post('/share-message_whatsapp', (req, res) => {
-//   const { shareUrl } = req.body;
-//   exec(`open "${shareUrl}"`, (error) => {
-//     if (error) {
-//       console.error("Error opening share URL:", error.message);
-//       return res.status(500).json({ message: "Error sharing message" });
-//     }
-//     return res.status(200).json({ message: "Message shared successfully" });
-//   });
-// });
-
 router.post("/share-message_whatsapp", async (req, res) => {
   const receiverData = req.body.receiverData;
   // const phoneNumbers = phone.map(p => `${p.replace(/\D/g,'')}`); // format phone numbers with country code
@@ -2708,21 +2394,6 @@ router.post("/share-message_whatsapp", async (req, res) => {
       sendMessage(data.phoneNumbers, data.message);
     })
   );
-
-  // const url = `whatsapp://send?phone=${phoneNumbers}&text=${encodeURIComponent(message)}`;
-  // opn(url, (err) => {
-  //   if (err) {
-  //     console.error(err);
-  //     return res.json({
-  //       status: false,
-  //       message: "Error opening share URL",
-  //     });
-  //   }
-  //   return res.json({
-  //     status: true,
-  //     message: "URL opened successfully",
-  //   });
-  // });
   return res.json({
     status: true,
     message: "URL opened successfully",
@@ -2758,12 +2429,10 @@ sendMessage = function (phoneNumbers, message) {
   });
 };
 
-
 // FILE SUB-MODULE
 const upload = multer({
   storage: multer.memoryStorage({}),
   fileFilter: (req, file, cb) => {
-    console.log('file filter', file)
     if (req.body.fileType.toUpperCase() == "PDF") {
       if (!file.originalname.match(/\.(pdf)$/)) {
         return cb("File format is unsupported, please upload pdf file!");
@@ -2778,58 +2447,96 @@ const upload = multer({
     fileSize: 20971520, //((20 * 1024) KB * 1024) MB
   },
 }).fields([
-  { name: "pdf", maxCount: 2 },
+  { name: "pdf", maxCount: 1 },
   { name: "file", maxCount: 6 },
 ]);
 
-const contentFileHandler = async function (req, res, action) {
-  upload(req, res, async function (error) {
-    let { title = "", fileType = "", description = "" } = req.body;
-    console.log(title, fileType)
-    if (title == "" || fileType == "") {
-      return res.json({
-        status: false,
-        message: "Please provide the required data",
-      });
-    }
-    console.log("req.files", req.files);
+const { MulterError } = require("multer");
+const { log } = require("console");
+const { findById } = require("../../models/followUpModel");
 
-    if (error) {
-      if (error instanceof multer.MulterError) {
-        if (error.code == "LIMIT_UNEXPECTED_FILE" || "LIMIT_FILE_COUNT") {
-          return res.json({
-            status: false,
-            message: "File uploading limit exceeded!",
-          });
+const multerErrorWrapper = (upload) => (req, res, next) => {
+  try {
+    upload(req, res, (err) => {
+      log("error in multer", err);
+      if (err instanceof MulterError) {
+        if (err.code == "LIMIT_FILE_SIZE") {
+          req.errors = "Please add file of size less than 20 MB ";
         }
-        if (error.code == "LIMIT_FILE_SIZE") {
-          return res.json({
-            status: false,
-            message: "Maximum 10MB file is allowed!",
-          });
+        if (err.code == "LIMIT_UNEXPECTED_FILE") {
+          req.errors = "Plese add limited files or PDF.";
         }
-      } else if (error) {
+      } else if (err) {
+        req.errors = err;
+      }
+      if (req.errors) {
+        return res.json({ status: false, message: req.errors });
+      }
+      next();
+    });
+  } catch (error) {
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+};
+
+router.post(
+  "/file",
+  protectTo,
+  multerErrorWrapper(upload),
+  async (req, res) => {
+    try {
+      const feedById = req.loggedInUser.user_id;
+      let imageUrlData = [];
+      let pdfUrlData = [];
+      let {
+        title = "",
+        description = "",
+        fileType = "",
+        mediaUrl = "",
+        websiteUrl = "",
+      } = req.body;
+
+      if (!title && !fileType) {
         return res.json({
           status: false,
-          message: error,
+          message: "Please provide title and filetype",
         });
       }
-    }
 
-    const decodedToken = jwt.verify(req.token, "test");
-    const feedById = decodedToken.user_id;
-    let imageUrlData = [];
-    let pdfUrlData = [];
+      if (mediaUrl) {
+        const pattern =
+          /^(?:https?:\/\/)?(?:m\.|www\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})(?:\S+)?$/;
+        if (!mediaUrl.match(pattern)) {
+          return res.json({
+            status: false,
+            message: "Please provide valid youtube url",
+          });
+        }
+      }
 
-    if (action == "CREATE") {
+      if (websiteUrl) {
+        const pattern =
+          /(https:\/\/www\.|http:\/\/www\.|https:\/\/|http:\/\/)?[a-zA-Z]{2,}(\.[a-zA-Z]{2,})(\.[a-zA-Z]{2,})?\/[a-zA-Z0-9]{2,}|((https:\/\/www\.|http:\/\/www\.|https:\/\/|http:\/\/)?[a-zA-Z]{2,}(\.[a-zA-Z]{2,})(\.[a-zA-Z]{2,})?)|(https:\/\/www\.|http:\/\/www\.|https:\/\/|http:\/\/)?[a-zA-Z0-9]{2,}\.[a-zA-Z0-9]{2,}\.[a-zA-Z0-9]{2,}(\.[a-zA-Z0-9]{2,})?/g;
+        if (!websiteUrl.match(pattern)) {
+          return res.json({
+            status: false,
+            message: "Please provide valid website url",
+          });
+        }
+      }
+
+      fileType = fileType.toUpperCase();
+      log("fileType", fileType);
       const date = get_current_date().split(" ")[0];
-      if (req.body?.fileType.toUpperCase() == "CATALOGUE") {
-        // const path = "./images/files/";
-
+      if (fileType == "CATALOGUE") {
+        // const path = "./images/File/";
         if (req.files.file) {
           imageUrlData = Promise.all(
             req.files.file.map((file) =>
-              writeFilePromise(file)
+              writeImagePromise(file)
                 .then((path) => path)
                 .catch((err) => err)
             )
@@ -2838,168 +2545,266 @@ const contentFileHandler = async function (req, res, action) {
         if (req.files.pdf) {
           pdfUrlData = Promise.all(
             req.files.pdf.map((file) =>
-              writeFilePromise(file)
+              writePdfPromise(file)
                 .then((path) => path)
                 .catch((err) => err)
             )
           );
         }
-      } else if (req.body?.fileType.toUpperCase() == "PDF") {
+      } else if (fileType == "PDF") {
         if (!req.files.pdf) {
           return res.json({
             status: true,
-            message: "Please provide pdf"
+            message: "Please provide pdf",
           });
         }
         pdfUrlData = Promise.all(
           req.files.pdf.map((file) =>
-            writeFilePromise(file)
+            writePdfPromise(file)
               .then((path) => path)
               .catch((err) => err)
           )
         );
+      } else {
+        return res.json({
+          status: false,
+          message: "Please provide valid fileType",
+        });
       }
+
       imageUrlData = (await imageUrlData) || null;
       pdfUrlData = (await pdfUrlData) || null;
       const file_data = File.create({
         title: title.trim(),
-        description: description.trim(),
+        description: fileType == "PDF" ? null : description,
         images: imageUrlData,
         company_id: feedById,
         date,
+        mediaUrl: mediaUrl || null,
+        websiteUrl: websiteUrl || null,
         pdf: pdfUrlData,
         feedById,
         feedBy: "COMPANY",
-        fileType: fileType.toUpperCase(),
+        fileType: fileType,
         status: "Active",
       });
+
       return res.json({
         status: true,
         message: "File added successfully",
         data: await file_data,
       });
-    } else if (action == "UPDATE") {
-      console.log("req.files.file", req.files.file?.length);
-      console.log("req.files.pdf", req.files.pdf?.length);
-      const { id, title, fileType, status, body, description } = req.body;
-      if (!id) {
-        return res.json({ status: false, message: "Please provide the id" });
-      }
-      let update_date = get_current_date();
-      let updated_file = { feedById, update_date };
-
-      const date = get_current_date().split(" ")[0];
-      if (req.body?.fileType.toUpperCase() == "CATALOGUE") {
-        if (req.files.file?.length) {
-          imageUrlData = Promise.all(
-            req.files.file.map((file) =>
-              writeFilePromise(file)
-                .then((path) => path)
-                .catch((err) => err)
-            )
-          );
-        }
-        if (req.files.pdf?.length) {
-          pdfUrlData = Promise.all(
-            req.files.pdf.map((file) =>
-              writeFilePromise(file)
-                .then((path) => path)
-                .catch((err) => err)
-            )
-          );
-        }
-      } else if (req.body?.fileType.toUpperCase() == "PDF") {
-        if (req.files.pdf?.length) {
-          pdfUrlData = Promise.all(
-            req.files.pdf.map((file) =>
-              writeFilePromise(file)
-                .then((path) => path)
-                .catch((err) => err)
-            )
-          );
-        }
-      }
-      imageUrlData = (await imageUrlData) || null;
-      pdfUrlData = (await pdfUrlData) || null;
-      if (imageUrlData.length) {
-        updated_file.images = imageUrlData || null;
-      }
-      if (pdfUrlData.length) {
-        updated_file.pdf = pdfUrlData || null;
-      }
-      if (description) {
-        updated_file.description = description || null;
-      }
-      if (title) {
-        updated_file.title = title;
-      }
-      if (fileType) {
-        updated_file.fileType = fileType;
-      }
-      if (status) {
-        updated_file.status = status;
-      }
-      if (body) {
-        updated_file.body = body;
-      }
-      const updated_data = await File.findOneAndUpdate(
-        { _id: id },
-        updated_file,
-        {
-          new: true,
-        }
-      );
-      if (!updated_data) {
-        return res.json({ status: false, message: "Data not found!" });
-      }
+    } catch (error) {
       return res.json({
-        status: true,
-        message: "Updated successfully",
-        data: await updated_data,
+        status: false,
+        message: error.message,
       });
     }
-  });
-};
+  }
+);
 
-router.post("/file", protectTo, (req, res) => {
-  contentFileHandler(req, res, "CREATE");
+router.put("/file", protectTo, multerErrorWrapper(upload), async (req, res) => {
+  try {
+    console.log("file updating!");
+    const feedById = req.loggedInUser.user_id;
+    let imageUrlData = [];
+    let pdfUrlData = [];
+    console.log("req.files.file", req.files.file?.length);
+    console.log("req.files.pdf", req.files.pdf?.length);
+    let {
+      fileId = "",
+      title,
+      fileType = "",
+      status,
+      body,
+      description,
+      mediaUrl,
+      websiteUrl,
+    } = req.body;
+    if (!fileId) {
+      return res.json({ status: false, message: "Please provide the id" });
+    }
+    if (!fileType) {
+      return res.json({
+        status: false,
+        message: "Please provide the file type",
+      });
+    }
+    fileType = fileType.toUpperCase();
+    let update_date = get_current_date();
+    let updated_file = { feedById, update_date };
+
+    if (fileType == "CATALOGUE") {
+      if (req.files.file?.length) {
+        imageUrlData = Promise.all(
+          req.files.file.map((file) =>
+            writeImagePromise(file)
+              .then((path) => path)
+              .catch((err) => err)
+          )
+        );
+      }
+      if (req.files.pdf?.length) {
+        pdfUrlData = Promise.all(
+          req.files.pdf.map((file) =>
+            writePdfPromise(file)
+              .then((path) => path)
+              .catch((err) => err)
+          )
+        );
+      }
+    } else if (fileType == "PDF") {
+      if (req.files.pdf?.length) {
+        pdfUrlData = Promise.all(
+          req.files.pdf.map((file) =>
+            writePdfPromise(file)
+              .then((path) => path)
+              .catch((err) => err)
+          )
+        );
+      }
+    }
+    imageUrlData = (await imageUrlData) || null;
+    pdfUrlData = (await pdfUrlData) || null;
+    if (imageUrlData.length) {
+      updated_file.images = imageUrlData || null;
+    }
+    if (pdfUrlData.length) {
+      updated_file.pdf = pdfUrlData || null;
+    }
+    if (description) {
+      updated_file.description = description || null;
+    }
+    if (title) {
+      updated_file.title = title;
+    }
+    if (mediaUrl) {
+      updated_file.mediaUrl = mediaUrl;
+    }
+    if (websiteUrl) {
+      updated_file.websiteUrl = websiteUrl;
+    }
+    if (status) {
+      updated_file.status = status;
+    }
+    if (body) {
+      updated_file.body = body;
+    }
+    const updated_data = await File.findOneAndUpdate(
+      { _id: fileId },
+      updated_file,
+      {
+        new: true,
+      }
+    );
+    if (!updated_data) {
+      return res.json({ status: false, message: "Data not found!" });
+    }
+    return res.json({
+      status: true,
+      message: "Updated successfully",
+      data: await updated_data,
+    });
+  } catch (error) {
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
 });
 
-router.put("/file", protectTo, async (req, res) => {
+router.get("/file/:fileId/:userId", async (req, res) => {
   try {
-    contentFileHandler(req, res, "UPDATE");
-  } catch (err) {
-    console.log("error---", err);
+    const { fileId = "", userId = "" } = req.params;
+    if (!fileId || !userId) {
+      return res.json({ status: false, message: "Invalid url!" });
+    }
+    const sharedData = await SharedMedia.findOne({
+      media: fileId,
+      sharedWith: userId,
+    });
+    if (!sharedData) {
+      return res.json({
+        status: false,
+        message: "Media not found!",
+      });
+    }
+    let userData = {};
+    if (sharedData.userType.toUpperCase() == "LEAD") {
+      userData = await Lead.findById({ _id: userId });
+      if (!userData) {
+        return res.json({ status: false, message: "User not found!" });
+      }
+    } else if (sharedData.userType.toUpperCase() == "PARTY") {
+      userData = await Party.findById({ _id: userId });
+      if (!userData) {
+        return res.json({ status: false, message: "User not found!" });
+      }
+    } else if (sharedData.userType.toUpperCase() == "CUSTOMER") {
+      userData = await CustomerType.findById({ _id: userId });
+      if (!userData) {
+        return res.json({ status: false, message: "User not found!" });
+      }
+    } else {
+      return res.json({
+        status: false,
+        message: "Invalid url!",
+      });
+    }
+    const fileData = await File.findById({ _id: fileId });
+    if (!fileData) {
+      return res.json({ status: false, message: "File not found!" });
+    }
+    await SharedMedia.findOneAndUpdate(
+      { media: fileId, sharedWith: userId, userType: sharedData.userType },
+      {
+        opened: true,
+        unopened: false,
+        $inc: { openCount: 1 },
+      }
+    );
+    console.log("inside view file function", req.params);
+    return res.json({
+      status: true,
+      data: fileData,
+    });
+  } catch (error) {
+    res.json({ status: false, message: error.message });
   }
 });
 
 router.get("/file", protectTo, async (req, res) => {
   try {
-    const decodedToken = jwt.verify(req.token, "test");
-    console.log("decodedToken", decodedToken, req.body);
-    const companyId = decodedToken.user_id;
-    const page = req.body.page ? req.body.page : "1";
-    const status = req.body.status ? req.body.status : "";
-    const fileType = req.body.fileType ? req.body.fileType : "";
-    const fileId = req.body.fileId ? req.body.fileId : "";
+    console.log("body data", req.body);
+    const companyId = req.loggedInUser.user_id;
+    const {
+      page = "1",
+      status = "",
+      fileType = "",
+      fileId = "",
+      limit = 10,
+      skip = 0,
+    } = req.body;
     let isFiltered = "DEFAULT";
-    let filter = { company_id: companyId };
-    const limit = req.limit || 10;
-    const skip = req.skip || 0;
+    let filter = { company_id: companyId, is_delete: "0" };
     if (status) {
       filter.status = status;
       isFiltered = "COMPANY_ID";
     }
     if (fileType) {
-      filter.fileType = fileType;
+      filter.fileType = fileType.toUpperCase();
       isFiltered = "FILE_TYPE";
     }
     if (fileId) {
       filter._id = fileId;
       console.log("filter1", filter);
-      let file_data = await File.find(filter)
+      let file_data = await File.findOne(filter)
         .limit(limit * 1)
         .skip((page - 1) * limit);
+      console.log("filter1", file_data);
+      if (!file_data) {
+        return res.json({ status: false, message: "Data not found" });
+      }
       return res.json({
         status: true,
         message: "Data",
@@ -3007,13 +2812,13 @@ router.get("/file", protectTo, async (req, res) => {
       });
     } else {
       const [file_data, total_file_count] = await Promise.all([
-        File.find({ company_id: companyId, is_delete: "0" })
-          .limit(limit)
-          .skip(skip)
-          .sort({ _id: -1 }),
-        File.countDocuments({ company_id: companyId, is_delete: "0" }),
+        File.find(filter).limit(limit).skip(skip).sort({ _id: -1 }),
+        File.countDocuments(filter),
       ]);
       console.log("filter2", filter);
+      if (!file_data.length) {
+        return res.json({ status: false, message: "Data not found" });
+      }
       return res.json({
         status: true,
         message: "Data",
@@ -3022,41 +2827,41 @@ router.get("/file", protectTo, async (req, res) => {
         count: total_file_count,
       });
     }
-  } catch (err) {
-    console.log("error---", err);
+  } catch (error) {
+    return res.json({
+      status: false,
+      message: error.message,
+    });
   }
 });
 
 router.delete("/file/:id", protectTo, async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(id);
-    if (!id)
-      return res.json({
-        status: false,
-        message: "Please provide the valid id",
-      });
-    const decodedToken = jwt.verify(req.token, "test");
-    const companyId = decodedToken.user_id;
-    const findData = await File.find({
+    if (!id) {
+      return errorHandler(res, 400, "Please provide the valid id!");
+    }
+    const companyId = req.loggedInUser.user_id;
+    const findData = await File.findOne({
       _id: id,
       company_id: companyId,
       is_delete: "0",
     });
     console.log(findData);
-    if (!findData.length)
-      return res.json({ status: false, message: "Data Not Found" });
+    if (!findData) {
+      return errorHandler(res, 404, "Data Not Found!");
+    }
     await File.findByIdAndUpdate(
       { _id: id, company_id: companyId },
       { $set: { is_delete: "1", status: "InActive" } }
     );
     return res.json({ status: true, message: "Deleted successfully" });
-  } catch (err) {
-    console.error("error----", err);
+  } catch (error) {
+    return errorHandler(res, error.Status, error.message);
   }
 });
 
-const writeFilePromise = function (file) {
+const writePdfPromise = function (file) {
   let fileName =
     Date.now() +
     "_" +
@@ -3064,400 +2869,35 @@ const writeFilePromise = function (file) {
     "." +
     file.originalname.substr(file.originalname.lastIndexOf(".") + 1);
   return new Promise((resolve, reject) => {
-    fs.writeFile(`./images/files/${fileName}`, file.buffer, (err) => {
+    fs.writeFile(`./images/File/${fileName}`, file.buffer, (err) => {
       if (err) reject(err);
       else {
-        resolve(`${base_url}images/files/${fileName}`);
+        resolve(`${getBaseUrl()}images/File/${fileName}`);
       }
     });
   });
 };
 
-// const imageStorage2 = multer.diskStorage({
-//   destination: "images/file",
-//   filename: (req, file, cb) => {
-//     console.log("imageStorage2", imageStorage2)
-//     cb(null, file.fieldname + '_' + Date.now()
-//       + path.extname(file.originalname))
-//   }
-// });
-
-// const imageUpload2 = multer({
-//   storage: imageStorage2,
-//   limits: {
-//     fileSize: 100000000
-//   },
-//   fileFilter(req, file, cb) {
-//     console.log("imageUpload2")
-//     if (!file.originalname.match(/\.(png|jpg|pdf)$/)) {
-//       return cb(new Error('Please upload a Image'))
-//     }
-//     cb(undefined, true)
-//   }
-// }).single('file')
-
-// router.post('/file', async (req, res) => {
-//   try {
-//     // const string = JSON.stringify(req.headers["content-type"])
-//     // console.log(string[string.match('boundary')])
-//     imageUpload2(req, res, async (err) => {
-//       if (err) {
-//         console.error(err);
-//         return res.status(400).json({ message: err.message });
-//       }
-//       const imageUrl = req.file ? `${req.file.filename}` : null;
-//       const { title = "", fileType = "" } = req.body;
-//       const companyId = req.company_id;
-//       const date = get_current_date().split(" ")[0];
-//       if (title == "" || fileType == "") return res.json({ status: false, message: "Please provide the required data" })
-//       const new_file = await File.create({
-//         title,
-//         image: base_url + imageUrl,
-//         companyId,
-//         date,
-//         fileType,
-//         status: "Active"
-//       });
-//       console.log("file", req.file)
-//       return res.json({ status: true, message: "File added successfully", result: new_file })
-//     })
-//   } catch (err) {
-//     console.log("error--", err)
-//   }
-// })
-
-// Import required packages and modules
-// const express = require('express');
-// const jwt = require('jsonwebtoken');
-// const multer = require('multer');
-// const path = require('path');
-// const { promisify } = require('util');
-// const fs = require('fs');
-// const { sequelize, File } = require('../../models/fileModel');
-
-// // Create the Express app
-// const app = express();
-
-// // Define the multer storage and upload objects
-// const imageStorage3 = multer.diskStorage({
-//   destination: path.join(__dirname, 'public', 'images', 'files'),
-//   filename: (req, file, cb) => {
-//     const extension = path.extname(file.originalname);
-//     const timestamp = new Date().getTime();
-//     cb(null, `${file.fieldname}_${timestamp}${extension}`);
-//   },
-// });
-// const imageUpload3= multer({
-//   storage: imageStorage3,
-//   limits: { fileSize: 100000000 },
-//   fileFilter: (req, file, cb) => {
-//     const extension = path.extname(file.originalname).toLowerCase();
-//     if (!['.jpg', '.jpeg', '.png'].includes(extension)) {
-//       return cb(new Error('Please upload an image file'));
-//     }
-//     cb(null, true);
-//   },
-// }).single('file');
-
-// // Define a middleware to validate the JWT token
-// // const authenticateUser = async (req, res, next) => {
-// //   try {
-// //     const authHeader = req.headers.authorization;
-// //     if (!authHeader) {
-// //       return res.status(401).json({ message: 'Authorization header missing' });
-// //     }
-// //     const [, token] = authHeader.split(' ');
-// //     if (!token) {
-// //       return res.status(401).json({ message: 'Token missing' });
-// //     }
-// //     const decodedToken = await promisify(jwt.verify)(token, 'secret');
-// //     req.userId = decodedToken.user_id;
-// //     next();
-// //   } catch (err) {
-// //     console.error(err);
-// //     res.status(401).json({ message: 'Invalid token' });
-// //   }
-// // };
-
-// // Define the file upload route
-// app.post('/files', (req, res) => {
-//   imageUpload3(req, res, async (err) => {
-//     if (err) {
-//       console.error(err);
-//       return res.status(400).json({ message: err.message });
-//     }
-//     const { title, body } = req.body;
-//     if (!title || !body) {
-//       return res.status(400).json({ message: 'Title and body are required' });
-//     }
-//     const imageUrl = req.file ? `/images/files/${req.file.filename}` : null;
-//     try {
-//       const newFile = await sequelize.transaction(async (t) => {
-//         const file = await File.create(
-//           {
-//             title,
-//             body,
-//             imageUrl,
-//             user_id: req.userId,
-//             status: 'Active',
-//           },
-//           { transaction: t }
-//         );
-//         return file.toJSON();
-//       });
-//       return res.status(201).json({ message: 'File uploaded successfully', data: newFile });
-//     } catch (err) {
-//       console.error(err);
-//       if (imageUrl) {
-//         await promisify(fs.unlink)(path.join(__dirname, 'public', imageUrl));
-//       }
-//       return res.status(500).json({ message: 'Internal transaction4 error' });
-//     }
-//   });
-// });
-
-// // Start the server
-// app.listen(3000, () => console.log('Server started on http://localhost:3000'));
-
-router.post("/shareFile", async (req, res) => {
-  const { phone, id, body } = req.body;
-  const fileData = await File.findOne({ _id: id });
-  let message = `${fileData.title},${fileData.title},${body}`;
-  // const phoneNumbers = phone.map(p => `${p.replace(/\D/g,'')}`); // format phone numbers with country code
-  // const url = `https://wa.me/${phoneNumbers.join(",")}?text=${encodeURIComponent(message)}`;
-  const phoneNumbers = phone.join(",");
-  console.log("phoneNumbers-----   ", typeof phoneNumbers);
-  const url = `whatsapp://send?phone=${phoneNumbers}&text=${encodeURIComponent(
-    message
-  )}`;
-  opn(url, (err) => {
-    if (err) {
-      console.error(err);
-      return res.json({
-        status: false,
-        message: "Error opening share URL",
+const writeImagePromise = function (file) {
+  let fileName =
+    Date.now() +
+    "_" +
+    file.originalname.substr(0, 6).split(" ").join("_") +
+    "." +
+    file.originalname.substr(file.originalname.lastIndexOf(".") + 1);
+  return new Promise((resolve, reject) => {
+    sharp(file.buffer)
+      .resize(320, 240)
+      .toFile(`./images/File/${fileName}`, (err) => {
+        if (err) reject(err);
+        else {
+          resolve(`${getBaseUrl()}images/File/${fileName}`);
+        }
       });
-    }
-    return res.json({
-      status: true,
-      message: "URL opened successfully",
-    });
   });
-  return res.json({
-    status: true,
-    message: "URL opened successfully",
-  });
-});
+};
 
-
-// BANNER SUB-MODULE
-const imageStorage3 = multer.diskStorage({
-  destination: "images/banner",
-  filename: (req, file, cb) => {
-    cb(
-      null,
-      file.fieldname + "_" + Date.now() + path.extname(file.originalname)
-    );
-  },
-});
-
-const imageUpload3 = multer({
-  storage: imageStorage3,
-  limits: {
-    fileSize: 100000000,
-  },
-  fileFilter(req, file, cb) {
-    if (!file.originalname.match(/\.(png|jpg)$/)) {
-      return cb(new Error("Please upload a Image"));
-    }
-    cb(undefined, true);
-  },
-}).single("banner");
-
-router.post("/banner", protectTo, async (req, res) => {
-  try {
-    imageUpload3(req, res, async (err) => {
-      if (err) {
-        console.error(err);
-        return res.status(400).json({ message: err.message });
-      }
-      const decodedToken = jwt.verify(req.token, "test");
-      const companyId = decodedToken.user_id;
-      const imageUrl = req.file ? `${req.file.filename}` : null;
-      let { title = "", bannerType = "" } = req.body;
-      const date = get_current_date().split(" ")[0];
-      bannerType = ["PERSONAL", "FESTIVAL", "PROMOTIONAL"]
-        .filter((type) => bannerType.trim().toUpperCase() === type)
-        .toString();
-      console.log(bannerType);
-      if (title == "" || bannerType == "")
-        return res.json({
-          status: false,
-          message: "Please provide the required data",
-        });
-      const new_banner = await Banner.create({
-        title,
-        poster: base_url + imageUrl,
-        companyId,
-        date,
-        bannerType,
-        status: "Active",
-      });
-      return res.json({
-        status: true,
-        message: "Banner added successfully",
-        result: new_banner,
-      });
-    });
-  } catch (err) {
-    console.log("error--", err);
-  }
-});
-
-router.put("/banner", protectTo, async (req, res) => {
-  try {
-    imageUpload3(req, res, async (err) => {
-      if (err) return res.status(400).json({ message: err.message });
-      const imageUrl = req.file ? `${req.file.filename}` : null;
-      const { id, title, bannerType, status } = req.body;
-      if (!id)
-        return res.json({ status: false, message: "Please provide the id" });
-      let update_banner = {};
-      if (imageUrl) update_banner.image = base_url + imageUrl;
-      if (title) update_banner.title = title;
-      if (bannerType) update_banner.bannerType = bannerType;
-      if (status) update_banner.status = status;
-      const banner = await Banner.findOneAndUpdate({ _id: id }, update_banner, {
-        new: true,
-      });
-      if (!banner) res.json({ status: false, message: "Data not found!" });
-      return res.json({
-        status: true,
-        message: "Updated successfully",
-        data: banner,
-      });
-    });
-  } catch (err) {
-    console.log("error---", err);
-  }
-});
-
-router.delete("/banner/:id", async (req, res) => {
-  try {
-    const { id } = req.body;
-    if (!id)
-      return res.json({ status: false, message: "Please provide the id" });
-    await Banner.findByIdAndUpdate({ _id: id }, { $set: { is_delete: "1" } });
-    return res.json({ status: true, message: "Deleted successfully" });
-  } catch (err) {
-    console.log("error----", err);
-  }
-});
-
-router.get("/banner", protectTo, async (req, res) => {
-  try {
-    const decodedToken = jwt.verify(req.token, "test");
-    const companyId = decodedToken.user_id;
-    const page = req.body.page ? req.body.page : "1";
-    const status = req.body.status ? req.body.status : "";
-    const bannerType = req.body.bannerType ? req.body.bannerType : "";
-    const bannerId = req.body.bannerId ? req.body.bannerId : "";
-    let filter = { companyId };
-    const limit = 10;
-    if (status) filter.status = status;
-    if (bannerType) {
-      if (typeof bannerType == "object") {
-        filter.bannerType = {};
-        filter.bannerType.$in = [];
-        bannerType.forEach((type) =>
-          filter.bannerType.$in.push(type.toUpperCase())
-        );
-      } else filter.bannerType = bannerType;
-    }
-    if (bannerId) {
-      let banner_data = await Banner.findOne({ _id: bannerId });
-      return res.json({ status: true, message: "Data", result: banner_data });
-    }
-    console.log("filter", filter, bannerType, typeof bannerType);
-    let banner_data = await Banner.find(filter)
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    let total_banner_data = await Banner.countDocuments(filter);
-    return res.json({
-      status: true,
-      message: "Data",
-      result: banner_data,
-      pageLength: Math.ceil(total_banner_data / limit),
-      count: total_banner_data,
-    });
-  } catch (err) {
-    console.log("error---", err);
-  }
-});
-
-router.post("/shareBanner", async (req, res) => {
-  const { phone, id, body } = req.body;
-  const bannnerData = await Banner.findOne({ _id: id });
-  let message = `Image-${bannnerData.poster},Title-${bannnerData.title},Message-${body}`;
-  // const phoneNumbers = phone.map(p => `${p.replace(/\D/g,'')}`); // format phone numbers with country code
-  // const url = `https://wa.me/${phoneNumbers.join(",")}?text=${encodeURIComponent(message)}`;
-  const phoneNumbers = phone.join(",");
-  console.log("phoneNumbers-----   ", typeof phoneNumbers);
-  const url = `whatsapp://send?phone=${phoneNumbers}&text=${encodeURIComponent(
-    message
-  )}`;
-  opn(url, (err) => {
-    if (err) {
-      console.error(err);
-      return res.json({
-        status: false,
-        message: "Error opening share URL",
-      });
-    }
-    return res.json({
-      status: true,
-      message: "URL opened successfully",
-    });
-  });
-  return res.json({
-    status: true,
-    message: "URL opened successfully",
-  });
-});
-
-
-// SHARE-MEDIA SUB-MODULE
-// const SharedMedia = mongoose.model("SharedMedia");
-
-// router.post("/sharedMedia", protectTo, async (req, res) => {
-//   const companyId = await jwt.verify(req.token, "test").user_id;
-//   console.log(companyId, req.body);
-//   const { sharedWith = [], userType = "", media = "" } = req.body;
-//   if (!sharedWith.length)
-//     res.json({
-//       status: false,
-//       message: "Please provide user data whom to share",
-//     });
-//   if (!userType)
-//     res.json({ status: false, message: "Please provide user type" });
-//   const sharedMedia = await SharedMedia.create({
-//     sharedBy: companyId,
-//     sharedWith,
-//     userType,
-//     media,
-//   });
-//   if (!sharedMedia) res.json({ status: false, message: "Try again!" });
-//   res.json({ status: true, message: "Data is sucessfully created!" });
-// });
-
-// router.get("/listMedia", async (req, res) => {
-//   const data = await SharedMedia.find({})
-//     .populate("sharedWith")
-//     .populate("media");
-//   return res.json({ status: true, data });
-// });
-
-function protectTo(req, res, next) {
+async function protectTo(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
   if (!token) {
@@ -3466,8 +2906,376 @@ function protectTo(req, res, next) {
       message: "Token must be provided",
     });
   }
-  req.token = token;
+  req.loggedInUser = await jwt.verify(token, "test");
   next();
 }
 
-module.exports = router;  
+// SHARE-MEDIA SUB-MODULE
+router.post("/sharedMedia", protectTo, async (req, res) => {
+  try {
+    const company_id = req.loggedInUser.user_id;
+    let com_data = await Admin.findOne({ _id: company_id, is_delete: "0" });
+    if (!com_data) {
+      return res.status(401).json({ status: false, message: "No user found!" });
+    }
+    let { sharedWith = "", userType = "", media = "" } = req.body;
+    if (!sharedWith || !userType || !media) {
+      return res.json({
+        status: false,
+        message: `Please provide ${
+          !sharedWith
+            ? "user data whom to share"
+            : !userType
+            ? "type of user"
+            : "media url"
+        }`,
+      });
+    }
+    userType = userType.toUpperCase();
+    userType =
+      userType == "LEAD"
+        ? "Lead"
+        : userType == "PARTY"
+        ? "Party"
+        : userType == "CUSTOMER"
+        ? "CustomerType"
+        : "";
+    if (!userType) {
+      return res.json({
+        status: false,
+        message: "Please provide valid userType!",
+      });
+    }
+    const url =
+      `${getBaseUrl()}` + "lead_api/file/" + `${media + "/" + sharedWith}`;
+    const updateShareCount = await File.findByIdAndUpdate(
+      { _id: media },
+      { $inc: { sharedCount: 1 } },
+      { new: true }
+    );
+    console.log("updateShareCount", updateShareCount);
+    const sharedMedia = await SharedMedia.create({
+      sharedBy: {
+        _id: company_id,
+        by: "COMPANY",
+      },
+      company_id,
+      sharedWith,
+      userType,
+      media,
+    });
+    if (!sharedMedia) res.json({ status: false, message: "Try again!" });
+    res.json({ status: true, url });
+  } catch (error) {
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get("/sharedHistory/:id", protectTo, async (req, res) => {
+  try {
+    const company_id = req.loggedInUser.user_id;
+
+    const fileId = req.params.id;
+    if (!mongoose.isValidObjectId(fileId)) {
+      return res.status(401).json({
+        status: false,
+        message: "Provide valid id!",
+      });
+    }
+    const sharedCount = await File.findById(
+      { _id: fileId },
+      { sharedCount: 1 }
+    );
+    if (!sharedCount) {
+      return res.status(400).json({
+        status: false,
+        message: "File not found!",
+      });
+    }
+
+    console.log("companyId", company_id);
+    console.log("fileId", fileId);
+    const data = await SharedMedia.aggregate([
+      {
+        $match: {
+          company_id: mongoose.Types.ObjectId(company_id),
+          media: mongoose.Types.ObjectId(fileId),
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          opened: { $sum: { $cond: ["$opened", 1, 0] } },
+          unopened: { $sum: { $cond: ["$unopened", 1, 0] } },
+          viewMultipleTime: { $max: "$openCount" },
+        },
+      },
+    ]);
+    return res.json({
+      status: true,
+      data: { ...data[0], sharedCount: sharedCount.sharedCount },
+    });
+  } catch (error) {
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+});
+
+// FOLLOW_UP SUB-MODULE
+router.post("/followUp", protectTo, async (req, res) => {
+  try {
+    const user_id = req.loggedInUser.user_id;
+    let { type = "", description = "", date = "", leadId = "" } = req.body;
+    if (!leadId) {
+      return res.status(401).json({
+        status: false,
+        message: "lead_id require !",
+      });
+    }
+    if (!date || !type) {
+      return res.status(401).json({
+        status: false,
+        message: "Please provide valid data",
+      });
+    }
+    type = type.toUpperCase();
+    if (!["PHONE", "NOTE", "MEETING", "MESSAGE"].includes(type)) {
+      return errorHandler(res, 400, "Please provide valid type");
+    }
+    const admin = await Admin.findById({ _id: user_id });
+    if (!admin) {
+      return errorHandler(res, 401, "Not Authorized!");
+    }
+    const lead_data = await Lead.findById({ _id: leadId });
+    if (!lead_data) {
+      return errorHandler(res, 404, "Lead not found!");
+    }
+    console.log("adminData", admin);
+    const followup = await LeadFollowUp.create({
+      type,
+      description,
+      date: date.split(" ")[0],
+      time: date.split(" ")[1],
+      lead: leadId,
+      admin: lead_data.assignToEmp || user_id,
+      company_id: admin._id,
+    });
+
+    console.log("create FollowUp", !followup);
+    if (!followup) {
+      return res.status(401).json({
+        status: false,
+        message: "Please try again!",
+      });
+    }
+
+    return res.status(201).json({
+      status: true,
+      message: "Data created successfully!",
+    });
+  } catch (error) {
+    console.log("error", error);
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+});
+
+router.post("/listFollowUp", protectTo, async (req, res) => {
+  try {
+    let { leadId = "", page = 1, limit = 20 } = req.body;
+    if (!leadId) {
+      return res.status(400).json({
+        status: false,
+        message: "lead_id require !",
+        results: null,
+      });
+    }
+    const user_id = req.loggedInUser.user_id;
+    const admin = await Admin.findOne({ _id: user_id });
+    if (!admin) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found !",
+      });
+    }
+    let condition = {};
+    condition.is_delete = "0";
+    condition.lead = leadId;
+    const totalData = await LeadFollowUp.countDocuments(condition);
+    console.log("totalData", totalData, condition);
+    if (!totalData) {
+      return res.status(404).json({
+        status: false,
+        message: "Data not found!",
+      });
+    }
+    const lead_g_data = await LeadFollowUp.find(condition)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .sort({ date: 1, time: 1 });
+
+    return res.json({
+      status: true,
+      message: "Data Found",
+      pageLength: Math.ceil(totalData / limit),
+      count: totalData,
+      Data: lead_g_data,
+    });
+  } catch (error) {
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+});
+
+router.put("/followUp", protectTo, async (req, res) => {
+  try {
+    console.log("body", req.body);
+    let { type = "", description = "", date = "", id = "" } = req.body;
+
+    console.log("type description", type, description);
+    if (!id) {
+      return res.json({
+        status: false,
+        message: "followUp id require !",
+      });
+    }
+    var user_id = req.loggedInUser.user_id;
+    const admin = await Admin.findOne({ _id: user_id, is_deleted: "0" });
+    if (!admin) {
+      return res.status(401).json({
+        status: false,
+        message: "User not found !",
+      });
+    }
+    let updatingData = {};
+    updatingData.Updated_date = get_current_date();
+    if (type) {
+      type = type.toUpperCase();
+      if (!["PHONE", "NOTE", "MEETING", "MESSAGE"].includes(type)) {
+        return res.status(401).json({
+          status: false,
+          message: "Please provide valid type",
+        });
+      }
+      updatingData.type = type;
+    }
+    if (description) {
+      updatingData.description = description.trim();
+    }
+    if (date) {
+      updatingData.date = date.split(" ")[0];
+      updatingData.time = date.split(" ")[1];
+    }
+    console.log("updatingData", updatingData);
+    const followUp = await LeadFollowUp.findByIdAndUpdate(
+      { _id: id },
+      updatingData,
+      { new: true }
+    );
+    console.log("updated followUp", followUp);
+    if (!followUp) {
+      return res.status(400).json({
+        status: true,
+        message: "Please provide valid id!",
+      });
+    }
+    return res.status(200).json({
+      status: true,
+      message: "Update successfully",
+      results: followUp,
+    });
+  } catch (error) {
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get("/listFollowUpLogs", protectTo, async (req, res) => {
+  try {
+    const company_id = req.loggedInUser.user_id;
+    const currentDate = get_date().split(" ")[0];
+    const upcomingDate = get_date(
+      new Date(Date.now() + 7 * 24 * 3600 * 1000)
+    ).split(" ")[0];
+
+    const combinedCounts = await LeadFollowUp.aggregate([
+      {
+        $match: { company_id },
+      },
+      {
+        $facet: {
+          overdue: [
+            {
+              $match: {
+                date: { $lt: `${currentDate}` },
+              },
+            },
+            {
+              $count: "overdueCount",
+            },
+          ],
+          upcoming: [
+            {
+              $match: {
+                date: { $gte: `${currentDate}`, $lt: `${upcomingDate}` },
+              },
+            },
+            {
+              $count: "upcomingCount",
+            },
+          ],
+          someDay: [
+            {
+              $match: {
+                date: { $gte: `${upcomingDate}` },
+              },
+            },
+            {
+              $count: "someDayCount",
+            },
+          ],
+        },
+      },
+      {
+        $project: {
+          overdue: { $arrayElemAt: ["$overdue.overdueCount", 0] },
+          upcoming: { $arrayElemAt: ["$upcoming.upcomingCount", 0] },
+          someDay: { $arrayElemAt: ["$someDay.someDayCount", 0] },
+        },
+      },
+    ]);
+
+    const { overdue, upcoming, someDay } = combinedCounts[0];
+    return res.json({
+      status: true,
+      data: { overdue, upcoming, someDay },
+    });
+  } catch (error) {
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+});
+
+function get_date(today = new Date()) {
+  const dd = String(today.getDate()).padStart(2, "0");
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const yyyy = today.getFullYear();
+  const time =
+    today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+  return (today = yyyy + "-" + mm + "-" + dd + " " + time);
+}
+
+module.exports = router;

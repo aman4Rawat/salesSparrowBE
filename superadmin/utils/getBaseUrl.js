@@ -1,5 +1,5 @@
 const getBaseUrl = () => {
-    return "http://localhost:5000";
+    return "https://webservice.salesparrow.in/";
 }
 
 module.exports = getBaseUrl;
