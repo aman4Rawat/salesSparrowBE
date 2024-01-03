@@ -506,6 +506,7 @@ router.post("/get_clients", async (req, res) => {
                     }
                   }
                   let u_data = {
+                    _id: retailer_data[i]._id,
                     customer_name: retailer_data[i].customerName,
                     city: city_data.name,
                     beat_name: x,
@@ -935,7 +936,7 @@ router.post("/get_clients", async (req, res) => {
               }
               let u_data = {
                 lead_grp_name: grp_data[i].grp_name,
-                id: grp_data[i]._id,
+                _id: grp_data[i]._id,
                 lead_grp_color: grp_data[i].colour,
                 leads_count: leads_count.length,
                 leads_data: arr,
@@ -969,6 +970,7 @@ router.post("/get_clients", async (req, res) => {
               });
               let role_data = await Role.findOne({ _id: team_data[i].roleId });
               let u_data = {
+                _id: team_data[i]._id,
                 emp_name: team_data[i].employeeName,
                 image: team_data[i].image,
                 designation: role_data ? role_data.rolename : "NA",
@@ -2120,7 +2122,7 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
         return errorHandler(res, 404, "Customer not found!");
       }
     } else {
-      return errorHandler(res, 401, "Please provide valid userType!");
+      return errorHandler(res, 400, "Please provide valid userType!");
     }
     const url =
       `${getBaseUrl()}` + "lead_api/file/" + `${media + "/" + sharedWith}`;
@@ -2141,7 +2143,7 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
       media,
     });
     if (!sharedMedia) return res.json({ status: false, message: "Try again!" });
-    return res.json({ status: true, url, sharedMedia });
+    return res.json({ status: true, data: { url, sharedMedia} });
   } catch (error) {
     return res.json({
       status: false,
