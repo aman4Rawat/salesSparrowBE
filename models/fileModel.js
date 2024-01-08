@@ -13,6 +13,25 @@ const file_schema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    mediaUrl: {
+      type: String,
+    },
+    // website: {
+    //  name: {type: String, default: ""},
+    //  url: {type: String, default: ""}
+    // },
+    websiteName: {
+      type: String,
+      default: "",
+    },
+    websiteUrl: {
+      type: String,
+      default: "",
+    },
+    sharedCount: {
+      type: Number,
+      default: 0,
+    },
     images: {
       type: [String],
     },
@@ -30,7 +49,6 @@ const file_schema = new mongoose.Schema(
       default: "Inactive",
     },
     pdf: [String],
-    videoUrl: String,
     feedBy: {
       type: String,
     },
@@ -62,5 +80,4 @@ const file_schema = new mongoose.Schema(
   //     },
   // }
 );
-
 module.exports = mongoose.model("File", file_schema);

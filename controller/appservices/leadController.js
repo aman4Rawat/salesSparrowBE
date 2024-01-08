@@ -30,6 +30,7 @@ const multer = require("multer");
 const path = require("path");
 const sharp = require("sharp");
 
+const protectTo = require("../../utils/auth");
 const errorHandler = require("../../utils/errorResponse");
 
 const imageStorage = multer.diskStorage({
@@ -446,549 +447,533 @@ router.post("/get_leads", async (req, res) => {
   }
 });
 
-router.post("/get_clients", async (req, res) => {
-  let token = req.get("Authorization") ? req.get("Authorization") : "";
+router.post("/get_clients", protectTo, async (req, res) => {
   let status = req.body.status ? req.body.status : "";
   let type = req.body.type ? req.body.type : "";
   let page = req.body.page ? req.body.page : 1;
   let limit = req.body.limit ? req.body.limit : 20;
-  if (token != "") {
-    const decoded = await getDecodedToken(token);
-    let emp_id = decoded.user_id;
-    let emp_data = await Employee.findOne({ _id: emp_id });
-    Admin.find({ _id: emp_data.companyId })
-      .exec()
-      .then(async (user_info) => {
-        if (user_info.length < 1) {
-          res.status(401).json({
-            status: false,
-            message: "User not found !",
-            results: null,
-          });
-        } else {
-          if (type == "customers") {
-            let employee_id = req.body.employee_id ? req.body.employee_id : "";
-            let beat_id = req.body.beat_id ? req.body.beat_id : "";
-            let condition = {};
-            condition.company_id = emp_data.companyId;
-            if (status != "") {
-              condition.status = status;
-            }
-            if (employee_id != "") {
-              condition.employee_id = employee_id;
-              if (beat_id == "") {
-                let list = [];
-                let retailer_data = await Retailer.find(condition)
-                  .limit(limit * 1)
-                  .skip((page - 1) * limit);
-                let total_retailer_data = await Retailer.find(condition);
-                let count = total_retailer_data.length;
-                for (let i = 0; i < retailer_data.length; i++) {
-                  let route_data = Route.findOne({
-                    _id: retailer_data[i].route_id,
-                  });
-                  let city_data = Location.findOne({ id: route_data.city });
-                  let beat_data = await Beat.find({ company_id: user_id });
-                  let x = "";
-                  for (let j = 0; j < beat_data.length; j++) {
-                    if (beat_data[j].route.length > 0) {
-                      for (let k = 0; k < beat_data[j].route.length; k++) {
-                        if (
-                          beat_data[j].route[k] == retailer_data[i].route_id
-                        ) {
-                          x = beat_data[j].beatName;
-                          break;
-                        }
-                      }
-                    }
-                    if (x != "") {
-                      break;
-                    }
-                  }
-                  let u_data = {
-                    customer_name: retailer_data[i].customerName,
-                    city: city_data.name,
-                    beat_name: x,
-                    mobile_number: retailer_data[i].mobileNo,
-                    status: retailer_data[i].status,
-                  };
-                  list.push(u_data);
-                }
-                return res.json({
-                  status: true,
-                  message: "Data",
-                  result: list,
-                  page_length: Math.ceil(count / limit),
-                });
-              } else if (beat_id != "") {
-                let list = [];
-                let beat_data = await Beat.findOne({ _id: beat_id });
-                let retailer_list = [];
-                for (let i = 0; i < beat_data.route.length; i++) {
-                  let retailer_data = await Retailer.find({
-                    route_id: beat_data.route[i],
-                  });
-                  retailer_list.push(retailer_data);
-                }
-                for (let i = 0; i < retailer_list.length; i++) {
-                  let route_data = Route.findOne({
-                    _id: retailer_list[i].route_id,
-                  });
-                  let city_data = Location.findOne({ id: route_data.city });
-                  let beat_data = await Beat.find({ _id: beat_id });
-                  let u_data = {
-                    customer_name: retailer_list[i].customerName,
-                    city: city_data.name,
-                    beat_name: beat_data.beatName,
-                    mobile_number: retailer_list[i].mobileNo,
-                    status: retailer_list[i].status,
-                  };
-                  list.push(u_data);
-                }
-                return res.json({
-                  status: true,
-                  message: "Data",
-                  result: list,
-                });
-              }
-            } else if (employee_id == "") {
-              if (beat_id == "") {
-                let list = [];
-                let retailer_data = await Retailer.find(condition)
-                  .limit(limit * 1)
-                  .skip((page - 1) * limit);
-                let total_retailer_data = await Retailer.find(condition);
-                let count = total_retailer_data.length;
-                for (let i = 0; i < retailer_data.length; i++) {
-                  let route_data = Route.findOne({
-                    _id: retailer_data[i].route_id,
-                  });
-                  let city_data = Location.findOne({ id: route_data.city });
-                  let beat_data = await Beat.find({
-                    company_id: emp_data.companyId,
-                  });
-                  let x = "";
-                  for (let j = 0; j < beat_data.length; j++) {
-                    if (beat_data[j].route.length > 0) {
-                      for (let k = 0; k < beat_data[j].route.length; k++) {
-                        if (
-                          beat_data[j].route[k] == retailer_data[i].route_id
-                        ) {
-                          x = beat_data[j].beatName;
-                          break;
-                        }
-                      }
-                    }
-                    if (x != "") {
-                      break;
-                    }
-                  }
-                  let u_data = {
-                    customer_name: retailer_data[i].customerName,
-                    city: city_data.name,
-                    beat_name: x,
-                    mobile_number: retailer_data[i].mobileNo,
-                    status: retailer_data[i].status,
-                  };
-                  list.push(u_data);
-                }
-                return res.json({
-                  status: true,
-                  message: "Data",
-                  result: list,
-                  count,
-                  page_length: Math.ceil(count / limit),
-                });
-              } else if (beat_id != "") {
-                let list = [];
-                let beat_data = await Beat.findOne({ _id: beat_id });
-                let retailer_list = [];
-                for (let i = 0; i < beat_data.route.length; i++) {
-                  let retailer_data = await Retailer.find({
-                    route_id: beat_data.route[i],
-                  });
-                  retailer_list.push(retailer_data);
-                }
-                for (let i = 0; i < retailer_list.length; i++) {
-                  let route_data = Route.findOne({
-                    _id: retailer_list[i].route_id,
-                  });
-                  let city_data = Location.findOne({ id: route_data.city });
-                  let beat_data = await Beat.find({ _id: beat_id });
-                  let u_data = {
-                    customer_name: retailer_list[i].customerName,
-                    city: city_data.name,
-                    beat_name: beat_data.beatName,
-                    mobile_number: retailer_list[i].mobileNo,
-                    status: retailer_list[i].status,
-                  };
-                  list.push(u_data);
-                }
-                return res.json({
-                  status: true,
-                  message: "Data",
-                  result: list,
-                });
-              }
-            }
-            // let sub_type = req.body.sub_type?req.body.sub_type:"";
-            // if(sub_type == "retailers"){
-            //   let employee_id = req.body.employee_id?req.body.employee_id:"";
-            //   let beat_id = req.body.beat_id?req.body.beat_id:"";
-            //   let condition = {}
-            //   condition.company_id = user_id;
-            //   if(status !=""){
-            //     condition.status = status;
-            //   }
-            //   if(employee_id!=""){
-            //     condition.employee_id = employee_id;
-            //     if(beat_id == ""){
-            //       let list = []
-            //       let retailer_data = await Retailer.find(condition).limit(limit*1).skip((page-1)*limit);
-            //       let total_retailer_data = await Retailer.find(condition);
-            //       let count = total_retailer_data.length;
-            //       for(let i = 0;i<retailer_data.length;i++){
-            //         let route_data = Route.findOne({_id:retailer_data[i].route_id});
-            //         let city_data  = Location.findOne({id:route_data.city})
-            //         let beat_data = await Beat.find({company_id:user_id});
-            //         let x = "";
-            //         for(let j = 0;j<beat_data.length;j++){
-            //           if(beat_data[j].route.length>0){
-            //             for(let k = 0;k<beat_data[j].route.length;k++){
-            //               if(beat_data[j].route[k] == retailer_data[i].route_id){
-            //                 x = beat_data[j].beatName;
-            //                 break;
-            //               }
-            //             }
-            //           }
-            //           if(x != ""){
-            //             break;
-            //           }
-            //         }
-            //         let u_data = {
-            //           customer_name:retailer_data[i].customerName,
-            //           city:city_data.name,
-            //           beat_name:x,
-            //           mobile_number:retailer_data[i].mobileNo,
-            //           status:retailer_data[i].status,
-            //         }
-            //         list.push(u_data);
-            //       }
-            //       return res.json({status:true,message:"Data",result:list,page_length:Math.ceil(count/limit)})
-            //     }else if(beat_id !=""){
-            //       let list = []
-            //       let beat_data = await Beat.findOne({_id:beat_id});
-            //       let retailer_list = []
-            //       for(let i = 0;i<beat_data.route.length;i++){
-            //         let retailer_data = await Retailer.find({route_id:beat_data.route[i]});
-            //         retailer_list.push(retailer_data)
-            //       }
-            //       for(let i = 0;i<retailer_list.length;i++){
-            //         let route_data = Route.findOne({_id:retailer_list[i].route_id});
-            //         let city_data  = Location.findOne({id:route_data.city})
-            //         let beat_data = await Beat.find({_id:beat_id});
-            //         let u_data = {
-            //           customer_name:retailer_list[i].customerName,
-            //           city:city_data.name,
-            //           beat_name:beat_data.beatName,
-            //           mobile_number:retailer_list[i].mobileNo,
-            //           status:retailer_list[i].status,
-            //         }
-            //         list.push(u_data)
-            //       }
-            //       return res.json({status:true,message:"Data",result:list})
-            //     }
-            //   }else if(employee_id ==""){
-            //     if(beat_id == ""){
-            //       let list = []
-            //       let retailer_data = await Retailer.find(condition).limit(limit*1).skip((page-1)*limit);
-            //       let total_retailer_data = await Retailer.find(condition);
-            //       let count = total_retailer_data.length;
-            //       for(let i = 0;i<retailer_data.length;i++){
-            //         let route_data = Route.findOne({_id:retailer_data[i].route_id});
-            //         let city_data  = Location.findOne({id:route_data.city})
-            //         let beat_data = await Beat.find({company_id:user_id});
-            //         let x = "";
-            //         for(let j = 0;j<beat_data.length;j++){
-            //           if(beat_data[j].route.length>0){
-            //             for(let k = 0;k<beat_data[j].route.length;k++){
-            //               if(beat_data[j].route[k] == retailer_data[i].route_id){
-            //                 x = beat_data[j].beatName;
-            //                 break;
-            //               }
-            //             }
-            //           }
-            //           if(x != ""){
-            //             break;
-            //           }
-            //         }
-            //         let u_data = {
-            //           customer_name:retailer_data[i].customerName,
-            //           city:city_data.name,
-            //           beat_name:x,
-            //           mobile_number:retailer_data[i].mobileNo,
-            //           status:retailer_data[i].status,
-            //         }
-            //         list.push(u_data);
-            //       }
-            //       return res.json({status:true,message:"Data",result:list,page_length:Math.ceil(count/limit)})
-            //     }else if(beat_id !=""){
-            //       let list = []
-            //       let beat_data = await Beat.findOne({_id:beat_id});
-            //       let retailer_list = []
-            //       for(let i = 0;i<beat_data.route.length;i++){
-            //         let retailer_data = await Retailer.find({route_id:beat_data.route[i]});
-            //         retailer_list.push(retailer_data)
-            //       }
-            //       for(let i = 0;i<retailer_list.length;i++){
-            //         let route_data = Route.findOne({_id:retailer_list[i].route_id});
-            //         let city_data  = Location.findOne({id:route_data.city})
-            //         let beat_data = await Beat.find({_id:beat_id});
-            //         let u_data = {
-            //           customer_name:retailer_list[i].customerName,
-            //           city:city_data.name,
-            //           beat_name:beat_data.beatName,
-            //           mobile_number:retailer_list[i].mobileNo,
-            //           status:retailer_list[i].status,
-            //         }
-            //         list.push(u_data)
-            //       }
-            //       return res.json({status:true,message:"Data",result:list})
-            //     }
-            //   }
-            // }else if(sub_type == "parties"){
-            //   let condition = {};
-            //   let party_type = req.body.party_type?req.body.party_type:"";
-            //   if(party_type !=""){
-            //     condition.partyType = party_type;
-            //   }
-            //   let party_data = await Party.find({company_id:user_id}).limit(limit*1).skip((page-1)*limit);
-            //   let total_party_data = await Party.find({company_id:user_id});
-            //   let count = total_party_data.length;
-            //   let list = []
-            //   for(let i = 0;i<party_data.length;i++){
-            //     let city_data = await Location.findOne({id:party_data[i].city})
-            //     let u_data = {
-            //       party_name:party_data[i].firmName,
-            //       city:city_data.name,
-            //       mobile_number:party_data[i].mobileNo,
-            //       status:party_data[i].status,
-            //     }
-            //     list.push(u_data)
-            //   }
-            //   return res.json({status:true,message:"Data",result:list,page_length:Math.ceil(count/limit)})
-            // }else{
-            //   return res.json({status:false,message:"Please provide sub type"})
-            // }
-          } else if (type == "leads") {
-            let lead_stage = req.body.lead_stage ? req.body.lead_stage : "";
-            let lead_potential = req.body.lead_potential
-              ? req.body.lead_potential
-              : "";
-            let leadSource = req.body.leadSource ? req.body.leadSource : "";
-            let customer_grp = req.body.customer_grp
-              ? req.body.customer_grp
-              : "";
-            let search = req.body.search ? req.body.search : "";
-            let status = req.body.status ? req.body.status : "";
-            let state = req.body.state ? req.body.state : "";
-            let employee_id = req.body.employee_id ? req.body.employee_id : "";
-            var list1 = [];
-            var condition = {};
-            condition.is_delete = "0";
-            if (search != "") {
-              var regex = new RegExp(search, "i");
-              condition.leadName = regex;
-            }
-            if (state != "") {
-              condition.state = state;
-            }
-            if (status != "") {
-              condition.status = status;
-            }
-            if (lead_potential != "") {
-              condition.lead_potential = lead_potential;
-            }
-            if (customer_grp != "") {
-              condition.customer_grp = customer_grp;
-            }
-            if (employee_id != "") {
-              condition.assignToEmp = employee_id;
-            }
-            if (leadSource != "") {
-              condition.leadSource = leadSource;
-            }
-            if (lead_stage != "") {
-              condition.lead_stage = lead_stage;
-            }
-            let lead_data = await Lead.find(condition)
-              .limit(limit * 1)
-              .skip((page - 1) * limit);
-            let total_lead_data = await Lead.find(condition);
-            let count = total_lead_data.length;
-            if (lead_data.length < 1)
-              return res.status(200).json({
-                status: true,
-                message: "Not Available !",
-                results: list1,
-              });
-            let list = [];
-            for (let i = 0; i < lead_data.length; i++) {
-              let state_data = await Location.findOne({
-                id: lead_data[i].state,
-              });
-              let city_data = await Location.findOne({ id: lead_data[i].city });
-              let emp_data = await Employee.findById(lead_data[i].assignToEmp);
-              let lead_grp_data = await LeadGroup.findById(
-                lead_data[i].lead_grp
-              );
-              var leadfollow_data = await LeadFollowUp.findOne({
-                lead_id: lead_data[i]._id,
-              });
-              var u_data = {
-                _id: lead_data[i]._id,
-                company_id: lead_data[i].company_id,
-                leadName: lead_data[i].leadName,
-                mobileNumber: lead_data[i].mobileNumber,
-                state: state_data
-                  ? { id: lead_data[i].state, name: state_data.name }
-                  : { id: "NA", name: "NA" },
-                city: city_data
-                  ? { id: lead_data[i].city, name: city_data.name }
-                  : { id: "NA", name: "NA" },
-                leadSource: lead_data[i].leadSource,
-                assignToEmp: emp_data.employeeName,
-                lead_potential: lead_data[i].lead_potential,
-                lead_stage: lead_data[i].lead_stage,
-                lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
-                last_follow_date: leadfollow_data
-                  ? leadfollow_data.Created_date
-                  : "NA",
-              };
-              list.push(u_data);
-            }
-            return res.json({
-              status: true,
-              message: "Data",
-              count,
-              page_length: Math.ceil(count / limit),
-              result: list,
-            });
-          } else if (type == "groups") {
-            let list = [];
-            let date = get_current_date().split(" ")[0];
-            let new_lead_data = await Lead.find({
-              company_id: emp_data.companyId,
-              is_delete: "0",
-              date: date,
-            });
-            let new_leads = new_lead_data.length;
-            let grp_data = await LeadGroup.find({
-              company_id: emp_data.companyId,
-              is_delete: "0",
-            });
-            for (let i = 0; i < grp_data.length; i++) {
-              let leads_count = await LeadGroupItem.find({
-                grp_id: grp_data[i]._id,
-              });
-              console.log(leads_count);
-              let arr = [];
-              for (let i = 0; i < leads_count.length; i++) {
-                let lead_data = await Lead.findOne({
-                  _id: leads_count[i].lead_id,
-                  is_delete: "0",
-                });
-                // console.log(lead_data)
-                if (lead_data) {
-                  let state_data = await Location.findOne({
-                    id: lead_data.state,
-                  });
-                  let city_data = await Location.findOne({
-                    id: lead_data.city,
-                  });
-                  let emp_data = await Employee.findOne({
-                    _id: lead_data.assignToEmp,
-                  });
-                  let data = {
-                    lead_name: lead_data.leadName ? lead_data.leadName : "",
-                    _id: lead_data._id ? lead_data._id : "",
-                    mobile_no: lead_data.mobileNumber
-                      ? lead_data.mobileNumber
-                      : "",
-                    state: state_data ? state_data.name : "",
-                    city: city_data ? city_data.name : "",
-                    lead_source: lead_data.leadSource
-                      ? lead_data.leadSource
-                      : "",
-                    assigned_to: emp_data ? emp_data.employeeName : "",
-                    lead_potential: lead_data.lead_potential
-                      ? lead_data.lead_potential
-                      : "",
-                    lead_statge: lead_data.lead_stage
-                      ? lead_data.lead_stage
-                      : "",
-                    lead_grp: grp_data.grp_name,
-                    last_follow_up: "",
-                  };
-                  arr.push(data);
-                }
-              }
-              let u_data = {
-                lead_grp_name: grp_data[i].grp_name,
-                id: grp_data[i]._id,
-                lead_grp_color: grp_data[i].colour,
-                leads_count: leads_count.length,
-                leads_data: arr,
-              };
-              list.push(u_data);
-            }
-            // list.push({new_leads:new_leads})
-            return res.json({
-              status: true,
-              message: "Data",
-              result: list,
-              new_leads: new_leads,
-              new_lead_data: new_lead_data,
-            });
-          } else if (type == "teams") {
-            let list = [];
-            let team_data = await Employee.find({
-              companyId: emp_data.companyId,
-              is_delete: "0",
-            })
-              .limit(limit * 1)
-              .skip((page - 1) * limit);
-            let total_team_data = await Employee.find({
-              companyId: emp_data.companyId,
-              is_delete: "0",
-            });
-            let count = total_team_data.length;
-            for (let i = 0; i < team_data.length; i++) {
-              let state_data = await Location.findOne({
-                id: team_data[i].headquarterState,
-              });
-              let role_data = await Role.findOne({ _id: team_data[i].roleId });
-              let u_data = {
-                emp_name: team_data[i].employeeName,
-                image: team_data[i].image,
-                designation: role_data ? role_data.rolename : "NA",
-                state: state_data.name,
-              };
-              list.push(u_data);
-            }
-            return res.json({
-              status: true,
-              message: "Data",
-              count,
-              page_length: Math.ceil(count / limit),
-              result: list,
-            });
+  let emp_id = req.loggedInUser.user_id;
+  let emp_data = await Employee.findById(emp_id);
+  Admin.findById(emp_data.companyId)
+    .exec()
+    .then(async (user_info) => {
+      if (!user_info) {
+        res.status(401).json({
+          status: false,
+          message: "User not found !",
+          results: null,
+        });
+      } else {
+        if (type == "customers") {
+          let employee_id = req.body.employee_id ? req.body.employee_id : "";
+          let beat_id = req.body.beat_id ? req.body.beat_id : "";
+          let condition = {};
+          condition.company_id = emp_data.companyId;
+          if (status != "") {
+            condition.status = status;
           }
+          if (employee_id != "") {
+            condition.employee_id = employee_id;
+            if (beat_id == "") {
+              let list = [];
+              let retailer_data = await Retailer.find(condition)
+                .limit(limit * 1)
+                .skip((page - 1) * limit);
+              let total_retailer_data = await Retailer.find(condition);
+              let count = total_retailer_data.length;
+              for (let i = 0; i < retailer_data.length; i++) {
+                let route_data = Route.findOne({
+                  _id: retailer_data[i].route_id,
+                });
+                let city_data = Location.findOne({ id: route_data.city });
+                let beat_data = await Beat.find({ company_id: user_id });
+                let x = "";
+                for (let j = 0; j < beat_data.length; j++) {
+                  if (beat_data[j].route.length > 0) {
+                    for (let k = 0; k < beat_data[j].route.length; k++) {
+                      if (beat_data[j].route[k] == retailer_data[i].route_id) {
+                        x = beat_data[j].beatName;
+                        break;
+                      }
+                    }
+                  }
+                  if (x != "") {
+                    break;
+                  }
+                }
+                let u_data = {
+                  _id: retailer_data[i]._id,
+                  customer_name: retailer_data[i].customerName,
+                  city: city_data.name,
+                  beat_name: x,
+                  mobile_number: retailer_data[i].mobileNo,
+                  status: retailer_data[i].status,
+                };
+                list.push(u_data);
+              }
+              return res.json({
+                status: true,
+                message: "Data",
+                result: list,
+                page_length: Math.ceil(count / limit),
+              });
+            } else if (beat_id != "") {
+              let list = [];
+              let beat_data = await Beat.findOne({ _id: beat_id });
+              let retailer_list = [];
+              for (let i = 0; i < beat_data.route.length; i++) {
+                let retailer_data = await Retailer.find({
+                  route_id: beat_data.route[i],
+                });
+                retailer_list.push(retailer_data);
+              }
+              for (let i = 0; i < retailer_list.length; i++) {
+                let route_data = Route.findOne({
+                  _id: retailer_list[i].route_id,
+                });
+                let city_data = Location.findOne({ id: route_data.city });
+                let beat_data = await Beat.find({ _id: beat_id });
+                let u_data = {
+                  customer_name: retailer_list[i].customerName,
+                  city: city_data.name,
+                  beat_name: beat_data.beatName,
+                  mobile_number: retailer_list[i].mobileNo,
+                  status: retailer_list[i].status,
+                };
+                list.push(u_data);
+              }
+              return res.json({
+                status: true,
+                message: "Data",
+                result: list,
+              });
+            }
+          } else if (employee_id == "") {
+            if (beat_id == "") {
+              let list = [];
+              let retailer_data = await Retailer.find(condition)
+                .limit(limit * 1)
+                .skip((page - 1) * limit);
+              let total_retailer_data = await Retailer.find(condition);
+              let count = total_retailer_data.length;
+              for (let i = 0; i < retailer_data.length; i++) {
+                let route_data = Route.findOne({
+                  _id: retailer_data[i].route_id,
+                });
+                let city_data = Location.findOne({ id: route_data.city });
+                let beat_data = await Beat.find({
+                  company_id: emp_data.companyId,
+                });
+                let x = "";
+                for (let j = 0; j < beat_data.length; j++) {
+                  if (beat_data[j].route.length > 0) {
+                    for (let k = 0; k < beat_data[j].route.length; k++) {
+                      if (beat_data[j].route[k] == retailer_data[i].route_id) {
+                        x = beat_data[j].beatName;
+                        break;
+                      }
+                    }
+                  }
+                  if (x != "") {
+                    break;
+                  }
+                }
+                let u_data = {
+                  customer_name: retailer_data[i].customerName,
+                  city: city_data.name,
+                  beat_name: x,
+                  mobile_number: retailer_data[i].mobileNo,
+                  status: retailer_data[i].status,
+                };
+                list.push(u_data);
+              }
+              return res.json({
+                status: true,
+                message: "Data",
+                result: list,
+                count,
+                page_length: Math.ceil(count / limit),
+              });
+            } else if (beat_id != "") {
+              let list = [];
+              let beat_data = await Beat.findOne({ _id: beat_id });
+              let retailer_list = [];
+              for (let i = 0; i < beat_data.route.length; i++) {
+                let retailer_data = await Retailer.find({
+                  route_id: beat_data.route[i],
+                });
+                retailer_list.push(retailer_data);
+              }
+              for (let i = 0; i < retailer_list.length; i++) {
+                let route_data = Route.findOne({
+                  _id: retailer_list[i].route_id,
+                });
+                let city_data = Location.findOne({ id: route_data.city });
+                let beat_data = await Beat.find({ _id: beat_id });
+                let u_data = {
+                  customer_name: retailer_list[i].customerName,
+                  city: city_data.name,
+                  beat_name: beat_data.beatName,
+                  mobile_number: retailer_list[i].mobileNo,
+                  status: retailer_list[i].status,
+                };
+                list.push(u_data);
+              }
+              return res.json({
+                status: true,
+                message: "Data",
+                result: list,
+              });
+            }
+          }
+          // let sub_type = req.body.sub_type?req.body.sub_type:"";
+          // if(sub_type == "retailers"){
+          //   let employee_id = req.body.employee_id?req.body.employee_id:"";
+          //   let beat_id = req.body.beat_id?req.body.beat_id:"";
+          //   let condition = {}
+          //   condition.company_id = user_id;
+          //   if(status !=""){
+          //     condition.status = status;
+          //   }
+          //   if(employee_id!=""){
+          //     condition.employee_id = employee_id;
+          //     if(beat_id == ""){
+          //       let list = []
+          //       let retailer_data = await Retailer.find(condition).limit(limit*1).skip((page-1)*limit);
+          //       let total_retailer_data = await Retailer.find(condition);
+          //       let count = total_retailer_data.length;
+          //       for(let i = 0;i<retailer_data.length;i++){
+          //         let route_data = Route.findOne({_id:retailer_data[i].route_id});
+          //         let city_data  = Location.findOne({id:route_data.city})
+          //         let beat_data = await Beat.find({company_id:user_id});
+          //         let x = "";
+          //         for(let j = 0;j<beat_data.length;j++){
+          //           if(beat_data[j].route.length>0){
+          //             for(let k = 0;k<beat_data[j].route.length;k++){
+          //               if(beat_data[j].route[k] == retailer_data[i].route_id){
+          //                 x = beat_data[j].beatName;
+          //                 break;
+          //               }
+          //             }
+          //           }
+          //           if(x != ""){
+          //             break;
+          //           }
+          //         }
+          //         let u_data = {
+          //           customer_name:retailer_data[i].customerName,
+          //           city:city_data.name,
+          //           beat_name:x,
+          //           mobile_number:retailer_data[i].mobileNo,
+          //           status:retailer_data[i].status,
+          //         }
+          //         list.push(u_data);
+          //       }
+          //       return res.json({status:true,message:"Data",result:list,page_length:Math.ceil(count/limit)})
+          //     }else if(beat_id !=""){
+          //       let list = []
+          //       let beat_data = await Beat.findOne({_id:beat_id});
+          //       let retailer_list = []
+          //       for(let i = 0;i<beat_data.route.length;i++){
+          //         let retailer_data = await Retailer.find({route_id:beat_data.route[i]});
+          //         retailer_list.push(retailer_data)
+          //       }
+          //       for(let i = 0;i<retailer_list.length;i++){
+          //         let route_data = Route.findOne({_id:retailer_list[i].route_id});
+          //         let city_data  = Location.findOne({id:route_data.city})
+          //         let beat_data = await Beat.find({_id:beat_id});
+          //         let u_data = {
+          //           customer_name:retailer_list[i].customerName,
+          //           city:city_data.name,
+          //           beat_name:beat_data.beatName,
+          //           mobile_number:retailer_list[i].mobileNo,
+          //           status:retailer_list[i].status,
+          //         }
+          //         list.push(u_data)
+          //       }
+          //       return res.json({status:true,message:"Data",result:list})
+          //     }
+          //   }else if(employee_id ==""){
+          //     if(beat_id == ""){
+          //       let list = []
+          //       let retailer_data = await Retailer.find(condition).limit(limit*1).skip((page-1)*limit);
+          //       let total_retailer_data = await Retailer.find(condition);
+          //       let count = total_retailer_data.length;
+          //       for(let i = 0;i<retailer_data.length;i++){
+          //         let route_data = Route.findOne({_id:retailer_data[i].route_id});
+          //         let city_data  = Location.findOne({id:route_data.city})
+          //         let beat_data = await Beat.find({company_id:user_id});
+          //         let x = "";
+          //         for(let j = 0;j<beat_data.length;j++){
+          //           if(beat_data[j].route.length>0){
+          //             for(let k = 0;k<beat_data[j].route.length;k++){
+          //               if(beat_data[j].route[k] == retailer_data[i].route_id){
+          //                 x = beat_data[j].beatName;
+          //                 break;
+          //               }
+          //             }
+          //           }
+          //           if(x != ""){
+          //             break;
+          //           }
+          //         }
+          //         let u_data = {
+          //           customer_name:retailer_data[i].customerName,
+          //           city:city_data.name,
+          //           beat_name:x,
+          //           mobile_number:retailer_data[i].mobileNo,
+          //           status:retailer_data[i].status,
+          //         }
+          //         list.push(u_data);
+          //       }
+          //       return res.json({status:true,message:"Data",result:list,page_length:Math.ceil(count/limit)})
+          //     }else if(beat_id !=""){
+          //       let list = []
+          //       let beat_data = await Beat.findOne({_id:beat_id});
+          //       let retailer_list = []
+          //       for(let i = 0;i<beat_data.route.length;i++){
+          //         let retailer_data = await Retailer.find({route_id:beat_data.route[i]});
+          //         retailer_list.push(retailer_data)
+          //       }
+          //       for(let i = 0;i<retailer_list.length;i++){
+          //         let route_data = Route.findOne({_id:retailer_list[i].route_id});
+          //         let city_data  = Location.findOne({id:route_data.city})
+          //         let beat_data = await Beat.find({_id:beat_id});
+          //         let u_data = {
+          //           customer_name:retailer_list[i].customerName,
+          //           city:city_data.name,
+          //           beat_name:beat_data.beatName,
+          //           mobile_number:retailer_list[i].mobileNo,
+          //           status:retailer_list[i].status,
+          //         }
+          //         list.push(u_data)
+          //       }
+          //       return res.json({status:true,message:"Data",result:list})
+          //     }
+          //   }
+          // }else if(sub_type == "parties"){
+          //   let condition = {};
+          //   let party_type = req.body.party_type?req.body.party_type:"";
+          //   if(party_type !=""){
+          //     condition.partyType = party_type;
+          //   }
+          //   let party_data = await Party.find({company_id:user_id}).limit(limit*1).skip((page-1)*limit);
+          //   let total_party_data = await Party.find({company_id:user_id});
+          //   let count = total_party_data.length;
+          //   let list = []
+          //   for(let i = 0;i<party_data.length;i++){
+          //     let city_data = await Location.findOne({id:party_data[i].city})
+          //     let u_data = {
+          //       party_name:party_data[i].firmName,
+          //       city:city_data.name,
+          //       mobile_number:party_data[i].mobileNo,
+          //       status:party_data[i].status,
+          //     }
+          //     list.push(u_data)
+          //   }
+          //   return res.json({status:true,message:"Data",result:list,page_length:Math.ceil(count/limit)})
+          // }else{
+          //   return res.json({status:false,message:"Please provide sub type"})
+          // }
+        } else if (type == "leads") {
+          let lead_stage = req.body.lead_stage ? req.body.lead_stage : "";
+          let lead_potential = req.body.lead_potential
+            ? req.body.lead_potential
+            : "";
+          let leadSource = req.body.leadSource ? req.body.leadSource : "";
+          let customer_grp = req.body.customer_grp ? req.body.customer_grp : "";
+          let search = req.body.search ? req.body.search : "";
+          let status = req.body.status ? req.body.status : "";
+          let state = req.body.state ? req.body.state : "";
+          let employee_id = req.body.employee_id ? req.body.employee_id : "";
+          var list1 = [];
+          var condition = {};
+          condition.is_delete = "0";
+          if (search != "") {
+            var regex = new RegExp(search, "i");
+            condition.leadName = regex;
+          }
+          if (state != "") {
+            condition.state = state;
+          }
+          if (status != "") {
+            condition.status = status;
+          }
+          if (lead_potential != "") {
+            condition.lead_potential = lead_potential;
+          }
+          if (customer_grp != "") {
+            condition.customer_grp = customer_grp;
+          }
+          if (employee_id != "") {
+            condition.assignToEmp = employee_id;
+          }
+          if (leadSource != "") {
+            condition.leadSource = leadSource;
+          }
+          if (lead_stage != "") {
+            condition.lead_stage = lead_stage;
+          }
+          let lead_data = await Lead.find(condition)
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+          let total_lead_data = await Lead.find(condition);
+          let count = total_lead_data.length;
+          if (lead_data.length < 1)
+            return res.status(200).json({
+              status: true,
+              message: "Not Available !",
+              results: list1,
+            });
+          let list = [];
+          for (let i = 0; i < lead_data.length; i++) {
+            let state_data = await Location.findOne({
+              id: lead_data[i].state,
+            });
+            let city_data = await Location.findOne({ id: lead_data[i].city });
+            let emp_data = await Employee.findById(lead_data[i].assignToEmp);
+            let lead_grp_data = await LeadGroup.findById(lead_data[i].lead_grp);
+            var leadfollow_data = await LeadFollowUp.findOne({
+              lead_id: lead_data[i]._id,
+            });
+            var u_data = {
+              _id: lead_data[i]._id,
+              company_id: lead_data[i].company_id,
+              leadName: lead_data[i].leadName,
+              mobileNumber: lead_data[i].mobileNumber,
+              state: state_data
+                ? { id: lead_data[i].state, name: state_data.name }
+                : { id: "NA", name: "NA" },
+              city: city_data
+                ? { id: lead_data[i].city, name: city_data.name }
+                : { id: "NA", name: "NA" },
+              leadSource: lead_data[i].leadSource,
+              assignToEmp: emp_data.employeeName,
+              lead_potential: lead_data[i].lead_potential,
+              lead_stage: lead_data[i].lead_stage,
+              lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
+              last_follow_date: leadfollow_data
+                ? leadfollow_data.Created_date
+                : "NA",
+            };
+            list.push(u_data);
+          }
+          return res.json({
+            status: true,
+            message: "Data",
+            count,
+            page_length: Math.ceil(count / limit),
+            result: list,
+          });
+        } else if (type == "groups") {
+          let list = [];
+          let date = get_current_date().split(" ")[0];
+          let new_lead_data = await Lead.find({
+            company_id: emp_data.companyId,
+            is_delete: "0",
+            date: date,
+          });
+          let new_leads = new_lead_data.length;
+          let grp_data = await LeadGroup.find({
+            company_id: emp_data.companyId,
+            is_delete: "0",
+          });
+          for (let i = 0; i < grp_data.length; i++) {
+            let leads_count = await LeadGroupItem.find({
+              grp_id: grp_data[i]._id,
+            });
+            console.log(leads_count);
+            let arr = [];
+            for (let i = 0; i < leads_count.length; i++) {
+              let lead_data = await Lead.findOne({
+                _id: leads_count[i].lead_id,
+                is_delete: "0",
+              });
+              // console.log(lead_data)
+              if (lead_data) {
+                let state_data = await Location.findOne({
+                  id: lead_data.state,
+                });
+                let city_data = await Location.findOne({
+                  id: lead_data.city,
+                });
+                let emp_data = await Employee.findOne({
+                  _id: lead_data.assignToEmp,
+                });
+                let data = {
+                  lead_name: lead_data.leadName ? lead_data.leadName : "",
+                  _id: lead_data._id ? lead_data._id : "",
+                  mobile_no: lead_data.mobileNumber
+                    ? lead_data.mobileNumber
+                    : "",
+                  state: state_data ? state_data.name : "",
+                  city: city_data ? city_data.name : "",
+                  lead_source: lead_data.leadSource ? lead_data.leadSource : "",
+                  assigned_to: emp_data ? emp_data.employeeName : "",
+                  lead_potential: lead_data.lead_potential
+                    ? lead_data.lead_potential
+                    : "",
+                  lead_statge: lead_data.lead_stage ? lead_data.lead_stage : "",
+                  lead_grp: grp_data.grp_name,
+                  last_follow_up: "",
+                };
+                arr.push(data);
+              }
+            }
+            let u_data = {
+              lead_grp_name: grp_data[i].grp_name,
+              _id: grp_data[i]._id,
+              lead_grp_color: grp_data[i].colour,
+              leads_count: leads_count.length,
+              leads_data: arr,
+            };
+            list.push(u_data);
+          }
+          // list.push({new_leads:new_leads})
+          return res.json({
+            status: true,
+            message: "Data",
+            result: list,
+            new_leads: new_leads,
+            new_lead_data: new_lead_data,
+          });
+        } else if (type == "teams") {
+          let list = [];
+          let team_data = await Employee.find({
+            companyId: emp_data.companyId,
+            is_delete: "0",
+          })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+          let total_team_data = await Employee.find({
+            companyId: emp_data.companyId,
+            is_delete: "0",
+          });
+          let count = total_team_data.length;
+          for (let i = 0; i < team_data.length; i++) {
+            let state_data = await Location.findOne({
+              id: team_data[i].headquarterState,
+            });
+            let role_data = await Role.findOne({ _id: team_data[i].roleId });
+            let u_data = {
+              _id: team_data[i]._id,
+              emp_name: team_data[i].employeeName,
+              image: team_data[i].image,
+              designation: role_data ? role_data.rolename : "NA",
+              state: state_data.name,
+            };
+            list.push(u_data);
+          }
+          return res.json({
+            status: true,
+            message: "Data",
+            count,
+            page_length: Math.ceil(count / limit),
+            result: list,
+          });
         }
-      });
-  } else {
-    res.json({ status: false, message: "Token required!" });
-  }
+      }
+    });
 });
 
 router.post(
@@ -1389,6 +1374,7 @@ router.post(
         fileType = "",
         mediaUrl = "",
         websiteUrl = "",
+        websiteName = "",
       } = req.body;
 
       if (!title && !fileType) {
@@ -1424,7 +1410,6 @@ router.post(
       log("fileType", fileType);
       const date = get_current_date().split(" ")[0];
       if (fileType == "CATALOGUE") {
-        // const path = "./images/File/";
         if (req.files.file) {
           imageUrlData = Promise.all(
             req.files.file.map((file) =>
@@ -1473,6 +1458,7 @@ router.post(
         date,
         mediaUrl: mediaUrl || null,
         websiteUrl: websiteUrl || null,
+        websiteName,
         pdf: pdfUrlData,
         feedById: employeeId,
         feedBy: "EMPLOYEE",
@@ -1577,7 +1563,9 @@ router.put("/file", protectTo, multerErrorWrapper(upload), async (req, res) => {
       body,
       description,
       mediaUrl,
+      imageUrl = [],
       websiteUrl,
+      websiteName,
     } = req.body;
     if (!fileId || !title) {
       return res.json({
@@ -1629,11 +1617,28 @@ router.put("/file", protectTo, multerErrorWrapper(upload), async (req, res) => {
         );
       }
     }
+
+    if (imageUrl.length > 0) {
+      const strValid = new RegExp(
+        "^https://webservice.salesparrow.in/images/File/"
+      );
+      for (url of imageurl) {
+        if (!url.match(strValid)) {
+          return errorHandler(res, 400, "Invalid image url!");
+        }
+      }
+    }
+
     imageUrlData = (await imageUrlData) || null;
     pdfUrlData = (await pdfUrlData) || null;
+
     if (imageUrlData.length) {
-      updated_file.images = imageUrlData || null;
+      updated_file.images = [...imageUrlData, ...imageUrl] || null;
     }
+
+    imageUrlData = (await imageUrlData) || null;
+    pdfUrlData = (await pdfUrlData) || null;
+
     if (pdfUrlData.length) {
       updated_file.pdf = pdfUrlData || null;
     }
@@ -1648,6 +1653,9 @@ router.put("/file", protectTo, multerErrorWrapper(upload), async (req, res) => {
     }
     if (websiteUrl) {
       updated_file.websiteUrl = websiteUrl;
+    }
+    if (websiteName) {
+      updated_file.websiteName = websiteName;
     }
     if (status) {
       updated_file.status = status;
@@ -1829,7 +1837,7 @@ function writePdfPromise(file) {
   });
 }
 
-function writeImagePromise(file) {
+async function writeImagePromise(file) {
   let fileName =
     Date.now() +
     "_" +
@@ -2021,19 +2029,6 @@ function writeImagePromise(file) {
 // }
 // })
 
-async function protectTo(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-  if (!token) {
-    return res.json({
-      status: false,
-      message: "Token must be provided",
-    });
-  }
-  req.loggedInUser = await jwt.verify(token, "test");
-  next();
-}
-
 // SHARE-MEDIA SUB-MODULE
 // router.post("/sharedMedia", protectTo, async (req, res) => {
 //   const employeeId = req.loggedInUser.user_id;
@@ -2076,12 +2071,17 @@ async function protectTo(req, res, next) {
 router.post("/sharedMedia", protectTo, async (req, res) => {
   try {
     const employeeId = req.loggedInUser.user_id;
+    let { sharedWith = "", userType = "", media = "" } = req.body;
     let emp_data = await Employee.findOne({ _id: employeeId, is_delete: "0" });
     if (!emp_data) {
       return errorHandler(res, 401, "You are not authorized user!");
     }
+    const file = await File.findById(media);
+    if (!file) {
+      return errorHandler(res, 404, "File not found!");
+    }
+
     console.log("body", req.body);
-    let { sharedWith = "", userType = "", media = "" } = req.body;
     if (!sharedWith || !media) {
       return errorHandler(
         res,
@@ -2111,8 +2111,8 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
         return errorHandler(res, 404, "Party not found!");
       }
     } else if (userType == "CUSTOMER") {
-      userType = "CustomerType";
-      let userData = await CustomerType.findOne({
+      userType = "Retailer";
+      let userData = await Retailer.findOne({
         _id: sharedWith,
         assignToEmp: employeeId,
       });
@@ -2120,10 +2120,12 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
         return errorHandler(res, 404, "Customer not found!");
       }
     } else {
-      return errorHandler(res, 401, "Please provide valid userType!");
+      return errorHandler(res, 400, "Please provide valid userType!");
     }
     const url =
-      `${getBaseUrl()}` + "lead_api/file/" + `${media + "/" + sharedWith}`;
+      "https://crm.salesparrow.in/" +
+      "lead_api/file/" +
+      `${media + "/" + sharedWith}`;
     const updateShareCount = await File.findByIdAndUpdate(
       { _id: media },
       { $inc: { sharedCount: 1 } },
@@ -2141,7 +2143,7 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
       media,
     });
     if (!sharedMedia) return res.json({ status: false, message: "Try again!" });
-    return res.json({ status: true, url, sharedMedia });
+    return res.json({ status: true, data: { url, sharedMedia } });
   } catch (error) {
     return res.json({
       status: false,
@@ -2192,6 +2194,9 @@ router.get("/sharedHistory/:id", protectTo, async (req, res) => {
         },
       },
     ]);
+    if (!data.length) {
+      return res.json({ status: false, message: "History not found!" });
+    }
     return res.json({
       status: true,
       data: { ...data[0], sharedCount: sharedCount.sharedCount },
@@ -2348,7 +2353,9 @@ router.put("/followUp", protectTo, async (req, res) => {
     }
     if (date) {
       updatingData.date = date.split(" ")[0];
-      updatingData.time = date.split(" ")[1];
+      if (date.split(" ")[1]) {
+        updatingData.time = date.split(" ")[1];
+      }
     }
     console.log("updatingData", updatingData);
     const followUp = await LeadFollowUp.findByIdAndUpdate(
@@ -2396,6 +2403,14 @@ router.get("/listFollowUpLogs", protectTo, async (req, res) => {
         },
       },
       {
+        $lookup: {
+          from: "leads",
+          localField: "lead",
+          foreignField: "_id",
+          as: "lead",
+        },
+      },
+      {
         $facet: {
           overdue: [
             {
@@ -2417,10 +2432,10 @@ router.get("/listFollowUpLogs", protectTo, async (req, res) => {
             //   $count: "upcomingCount",
             // },
           ],
-          someDay: [
+          today: [
             {
               $match: {
-                date: { $gte: `${upcomingDate}` },
+                date: { $eq: `${currentDate}` },
               },
             },
             // {
