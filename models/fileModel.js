@@ -16,8 +16,17 @@ const file_schema = new mongoose.Schema(
     mediaUrl: {
       type: String,
     },
+    // website: {
+    //  name: {type: String, default: ""},
+    //  url: {type: String, default: ""}
+    // },
+    websiteName: {
+      type: String,
+      default: "",
+    },
     websiteUrl: {
       type: String,
+      default: "",
     },
     sharedCount: {
       type: Number,
@@ -40,7 +49,6 @@ const file_schema = new mongoose.Schema(
       default: "Inactive",
     },
     pdf: [String],
-    videoUrl: String,
     feedBy: {
       type: String,
     },
@@ -72,11 +80,4 @@ const file_schema = new mongoose.Schema(
   //     },
   // }
 );
-
-file_schema.pre("create", function (next) {
-  console.log("datbase middlware", this); // { name: 'John' }
-  //console.log(this.getUpdate()); // { age: 30 }
-  // log(next);
-});
-
 module.exports = mongoose.model("File", file_schema);

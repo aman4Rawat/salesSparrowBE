@@ -12,7 +12,7 @@ const sharedMedia_Model = new mongoose.Schema({
   userType: {
     type: String,
     required: true,
-    enum: ["Lead", "Party", "CustomerType"],
+    enum: ["Lead", "Party", "Retailer"],
   },
   sharedWith: {
     type: mongoose.Schema.Types.ObjectId,
