@@ -13,6 +13,16 @@ const file_schema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    mediaUrl: {
+      type: String,
+    },
+    websiteUrl: {
+      type: String,
+    },
+    sharedCount: {
+      type: Number,
+      default: 0,
+    },
     images: {
       type: [String],
     },
@@ -62,5 +72,11 @@ const file_schema = new mongoose.Schema(
   //     },
   // }
 );
+
+file_schema.pre("create", function (next) {
+  console.log("datbase middlware", this); // { name: 'John' }
+  //console.log(this.getUpdate()); // { age: 30 }
+  // log(next);
+});
 
 module.exports = mongoose.model("File", file_schema);

@@ -56,6 +56,7 @@ app.use("/auth_api", require("./controllers/webservice/trackingController"));
 app.use("/auth_api", require("./controllers/webservice/mappingController"));
 app.use("/auth_api", require("./controllers/webservice/dashboardController"));
 app.use("/auth_api", require("./controllers/webservice/setting"));
+app.use("/auth_api/catalogue", require("./controllers/webservice/catalogueController"));
 
 //-------------------lead---------------------------------//
 app.use("/lead_api", require("./controllers/lead/LeadController"));

@@ -10,6 +10,7 @@ const updateProfile = async (req, res, next) => {
             if (error) throw new ApiError("Multer error!", 400);
 
             let { _id, first_name, last_name, phone_number, status, email, permissions, oldPassword, password } = req.body;
+            if(!_id) return res.json({status: false, message: "_id is required!"})
 
             let user = await SuperAdmin.findById(_id);
             let oldImage = user.profile_image || "";
