@@ -25,7 +25,7 @@ const updateProfile = async (req, res, next) => {
             }
             // if (String(status)) user.status = status;
 
-            if (req.file) user.profile_image = getBaseUrl() + "/images/" + req.file.filename;
+            if (req.file) user.profile_image = getBaseUrl() + "images/" + req.file.filename;
 
             await user.save();
             deleteImageHandler(oldImage);

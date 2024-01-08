@@ -49,7 +49,6 @@ const file_schema = new mongoose.Schema(
       default: "Inactive",
     },
     pdf: [String],
-    videoUrl: String,
     feedBy: {
       type: String,
     },

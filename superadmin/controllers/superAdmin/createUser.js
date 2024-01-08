@@ -14,7 +14,7 @@ const createUser = async (req, res, next) => {
             if (existingUser) throw new ApiError("User already exist!", 400);
 
             let profile_image;
-            if (req.file) profile_image = getBaseUrl() + "/images/" + req.file.filename;
+            if (req.file) profile_image = getBaseUrl() + "images/" + req.file.filename;
 
             const newUser = await SuperAdmin.create({
                 first_name, last_name, phone_number, email, password,
