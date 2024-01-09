@@ -710,6 +710,8 @@ router.post("/add_lead", async (req, res) => {
             results: null,
           });
         } else {
+          let state_data = await Location.findOne({ id: lead_data[i].state });
+          let city_data = await Location.findOne({ id: lead_data[i].city });
           var lead_data = new Lead();
           lead_data.company_id = user_id;
           lead_data.leadName = leadName;
@@ -724,6 +726,8 @@ router.post("/add_lead", async (req, res) => {
           lead_data.currency = currency;
           lead_data.lead_potential = lead_potential;
           lead_data.city = city;
+          lead_data.state_name = state_data ? state_data.name : "";
+          lead_data.city_name = city_data ? city_data.name : "";
           lead_data.leadSource = leadSource;
           lead_data.lead_stage = lead_stage;
           // lead_data.addBy               = addBy;
@@ -1317,8 +1321,10 @@ router.post("/get_clients", protectTo, async (req, res) => {
       employee_id = "",
     } = req.body;
     var list1 = [];
-    var condition = {};
-    condition.is_delete = "0";
+    var condition = {
+      company_id: user_id,
+      is_delete: "0",
+    };
     if (search != "") {
       var regex = new RegExp(search, "i");
       condition.leadName = regex;
@@ -2651,8 +2657,9 @@ router.put("/file", protectTo, multerErrorWrapper(upload), async (req, res) => {
     pdfUrlData = (await pdfUrlData) || null;
 
     if (imageUrlData.length) {
-      updated_file.images = [...imageUrlData, ...imageUrl] || null;
+      updated_file.images = imageUrlData.concat(imageUrl) || null;
     }
+
     if (pdfUrlData.length) {
       updated_file.pdf = pdfUrlData || null;
     }
@@ -3257,6 +3264,14 @@ router.get("/listFollowUpLogs", protectTo, async (req, res) => {
     const combinedCounts = await LeadFollowUp.aggregate([
       {
         $match: { company_id },
+      },
+      {
+        $lookup: {
+          from: "leads",
+          localField: "lead",
+          foreignField: "_id",
+          as: "lead",
+        },
       },
       {
         $facet: {
