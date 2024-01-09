@@ -3347,7 +3347,7 @@ function get_date(today = new Date()) {
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const yyyy = today.getFullYear();
   const time =
-    today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+    String(today.getHours()).padStart(2, "0") + ":" + String(today.getMinutes()).padStart(2, "0") + ":" + String(today.getSeconds()).padStart(2, "0");
   return (today = yyyy + "-" + mm + "-" + dd + " " + time);
 }
 

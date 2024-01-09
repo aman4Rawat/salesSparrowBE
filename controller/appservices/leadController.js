@@ -534,6 +534,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
                 let city_data = Location.findOne({ id: route_data.city });
                 let beat_data = await Beat.find({ _id: beat_id });
                 let u_data = {
+                  _id: retailer_list[i]._id,
                   customer_name: retailer_list[i].customerName,
                   city: city_data.name,
                   beat_name: beat_data.beatName,
@@ -542,6 +543,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
                 };
                 list.push(u_data);
               }
+              console.log("cutomer (**************)");
               return res.json({
                 status: true,
                 message: "Data",
@@ -579,6 +581,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
                   }
                 }
                 let u_data = {
+                  _id: retailer_data[i]._id,
                   customer_name: retailer_data[i].customerName,
                   city: city_data.name,
                   beat_name: x,
@@ -833,9 +836,18 @@ router.post("/get_clients", protectTo, async (req, res) => {
             let city_data = await Location.findOne({ id: lead_data[i].city });
             let emp_data = await Employee.findById(lead_data[i].assignToEmp);
             let lead_grp_data = await LeadGroup.findById(lead_data[i].lead_grp);
-            var leadfollow_data = await LeadFollowUp.findOne({
-              lead_id: lead_data[i]._id,
+            const currentDate = get_date();
+            var leadfollow_data = await LeadFollowUp.find({
+              lead: lead_data[i]._id,
+              companyId: emp_data.company_id,
+              date: { $lte: currentDate.split(" ")[0] },
+              time: { $lte: currentDate.split(" ")[1] },
             });
+            console.log(
+              "***********leadFollowUpDate**********",
+              leadfollow_data,
+              currentDate
+            );
             var u_data = {
               _id: lead_data[i]._id,
               company_id: lead_data[i].company_id,
@@ -852,9 +864,9 @@ router.post("/get_clients", protectTo, async (req, res) => {
               lead_potential: lead_data[i].lead_potential,
               lead_stage: lead_data[i].lead_stage,
               lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
-              last_follow_date: leadfollow_data
-                ? leadfollow_data.Created_date
-                : "NA",
+              last_follow_date: !leadfollow_data.length
+                ? "NA"
+                : leadfollow_data[0].created_date,
             };
             list.push(u_data);
           }
@@ -2469,11 +2481,18 @@ router.get("/listFollowUpLogs", protectTo, async (req, res) => {
 });
 
 function get_date(today = new Date()) {
+  if (today == "Invalid Date") {
+    today = new Date();
+  }
   const dd = String(today.getDate()).padStart(2, "0");
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const yyyy = today.getFullYear();
   const time =
-    today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+    String(today.getHours()).padStart(2, "0") +
+    ":" +
+    String(today.getMinutes()).padStart(2, "0") +
+    ":" +
+    String(today.getSeconds()).padStart(2, "0");
   return (today = yyyy + "-" + mm + "-" + dd + " " + time);
 }
 
