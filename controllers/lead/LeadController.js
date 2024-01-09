@@ -1367,7 +1367,13 @@ router.post("/get_clients", protectTo, async (req, res) => {
       });
       let emp_data = await Employee.findById(lead_data[i].assignToEmp);
       let lead_grp_data = await LeadGroup.findById(lead_data[i].customer_grp);
-      var leadfollow_data = await LeadFollowUp.findById(lead_data[i]._id);
+      const currentDate = get_date();
+      var leadfollow_data = await LeadFollowUp.find({
+        lead: lead_data[i]._id,
+        date: { $lte: currentDate.split(" ")[0] },
+        time: { $lte: currentDate.split(" ")[1] },
+      });
+      console.log("***********leadFollowUpDate**********", leadfollow_data);
       var u_data = {
         _id: lead_data[i]._id,
         company_id: lead_data[i].company_id,
@@ -1382,7 +1388,9 @@ router.post("/get_clients", protectTo, async (req, res) => {
         lead_potential: lead_data[i].lead_potential,
         lead_stage: lead_data[i].lead_stage,
         lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
-        last_follow_date: leadfollow_data ? leadfollow_data.Created_date : "NA",
+        last_follow_date: !leadfollow_data.length
+          ? "NA"
+          : leadfollow_data[0].created_date,
         displayName: lead_data[i].displayName,
         email: lead_data[i].email,
         pincode: lead_data[i].pincode,
