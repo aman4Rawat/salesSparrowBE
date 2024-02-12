@@ -354,11 +354,15 @@ router.post("/getAllEmployee", async (req, res) => {
   var state = req.body.state ? req.body.state : "";
   var employee_id = req.body.employee_id ? req.body.employee_id : "";
   var search = req.body.search ? req.body.search : "";
+  var status = req.body.status ? req.body.status : "";
   var limit = req.body.limit ? req.body.limit : 10;
   let arr = [{ is_delete: "0" }];
   if (search != "") {
     var regex = new RegExp(search, 'i');
     arr.push({ employeeName: regex })
+  }
+  if (status != "") {
+    arr.push({status: {$in: ['Approved', "Active"]}})
   }
   if (state != "") {
     arr.push({ companyId: user_id }, { headquarterState: state });

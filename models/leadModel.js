@@ -58,6 +58,8 @@ const lead_model = new Schema({
         type:String,
         default: ""
     },
+    state_name: String,
+    city_name: String,
     // addBy:{
     //     type:String,
     //     default: ""
@@ -90,6 +92,6 @@ const lead_model = new Schema({
         type: String,
         default:'0'
     }
-});
+}, {timestamps: true});
 
 module.exports = mongoose.model('Lead',lead_model)

@@ -2,7 +2,7 @@ const express = require('express');
 var router = express.Router();
 const base_url = 'https://webservice.salesparrow.in/';
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const Admin = mongoose.model('AdminInfo');
 const Employee = mongoose.model('Employee');
@@ -125,45 +125,45 @@ router.post('/register', async (req, res) => {
                           } else {
                             csc2 = 1;
                           }
-                          bcrypt.hash(password, 10, function (err, hash) {
-                            // var companyName_s = companyName;
-                            // companyName_s = companyName_s.slice(0,4);
-                            // let rand_int = order_id();
-                            // let csc = companyName_s+dd+yyyy+rand_int;
-                            let csc = `${companyName.slice(0, 4)}${dd}${yyyy.slice(2)}`;
-                            var new_admin = new Admin({
-                              company_name: companyName,
-                              companyShortCode: csc,
-                              companyShortCode2: csc2,
-                              phone: phone,
-                              password: hash,
-                              email: email,
-                              city: city,
-                              country: country,
-                              state: state,
-                              pincode: pincode,
-                              GSTNo: GSTNo,
-                              Created_date: get_current_date(),
-                              Updated_date: get_current_date(),
-                              status: "Active",
-                              demo_control: {
-                                endDate: new Date(new Date().setDate(new Date(Date.now()).getDate() + Number(7))).toLocaleDateString(),
-                                startDate: new Date().toLocaleDateString(),
-                                userCount: "10",
-                                plan: {
-                                  plan_name: "demo_control",
-                                  feature_includes: ["Live Dashboard", "Live Tracking", "Team Location", "Beat & Route Management", "Employee Management", "Party Management", "Attendance Report"],
-                                }
-                              },
-                            });
-                            new_admin.save().then((data) => {
-                              res.status(200).json({
-                                status: true,
-                                message: "New Admin is created successfully",
-                                results: data,
-                              });
+                          // bcrypt.hash(password, 10, function (err, hash) {
+                          // var companyName_s = companyName;
+                          // companyName_s = companyName_s.slice(0,4);
+                          // let rand_int = order_id();
+                          // let csc = companyName_s+dd+yyyy+rand_int;
+                          let csc = `${companyName.slice(0, 4)}${dd}${yyyy.slice(2)}`;
+                          var new_admin = new Admin({
+                            company_name: companyName,
+                            companyShortCode: csc,
+                            companyShortCode2: csc2,
+                            phone: phone,
+                            password,
+                            email: email,
+                            city: city,
+                            country: country,
+                            state: state,
+                            pincode: pincode,
+                            GSTNo: GSTNo,
+                            Created_date: get_current_date(),
+                            Updated_date: get_current_date(),
+                            status: "Active",
+                            demo_control: {
+                              endDate: new Date(new Date().setDate(new Date(Date.now()).getDate() + Number(7))).toLocaleDateString(),
+                              startDate: new Date().toLocaleDateString(),
+                              userCount: "10",
+                              plan: {
+                                plan_name: "demo_control",
+                                feature_includes: ["Live Dashboard", "Live Tracking", "Team Location", "Beat & Route Management", "Employee Management", "Party Management", "Attendance Report"],
+                              }
+                            },
+                          });
+                          new_admin.save().then((data) => {
+                            res.status(200).json({
+                              status: true,
+                              message: "New Admin is created successfully",
+                              results: data,
                             });
                           });
+                          // });
                         } else {
                           res.status(200).json({
                             status: false,
@@ -243,24 +243,24 @@ router.post('/adminLogin', (req, res) => {
   var password = (req.body.password) ? req.body.password : "";
   if (email != "") {
     if (password != "") {
-      Admin.findOne({ email: email }).exec().then(admin_data => {
+      Admin.findOne({ email, password }).exec().then(admin_data => {
         if (admin_data) {
-          bcrypt.compare(password, admin_data.password, function (err, result) {
-            if (result) {
-              const token = jwt.sign({ user_id: admin_data._id, is_token_valide: 1 }, "test");
-              res.json({
-                status: true,
-                message: "Login Successful",
-                result: admin_data,
-                token: token
-              })
-            } else {
-              res.json({
-                status: false,
-                message: "password is not matched.please check"
-              })
-            }
+          // bcrypt.compare(password, admin_data.password, function (err, result) {
+          // if (result) {
+          const token = jwt.sign({ user_id: admin_data._id, is_token_valide: 1 }, "test");
+          res.json({
+            status: true,
+            message: "Login Successful",
+            result: admin_data,
+            token: token
           })
+          // } else {
+          //   res.json({
+          //     status: false,
+          //     message: "password is not matched.please check"
+          //   })
+          // }
+          // })
         } else {
           res.json({
             status: false,
@@ -676,9 +676,9 @@ router.post('/resetPasswordAdmin', (req, res) => {
       const decodedToken = jwt.verify(token, "test");
       const Admin_id = decodedToken.user_id;
       Admin.findOne({ _id: Admin_id }).exec().then(data => {
-        bcrypt.hash(password, 10, function (err, hash) {
+        // bcrypt.hash(password, 10, function (err, hash) {
           var updated_admin = {};
-          updated_admin.password = hash;
+          updated_admin.password = password;
           Admin.findOneAndUpdate({ _id: Admin_id }, updated_admin, { new: true }, (err, doc) => {
             if (doc) {
               res.json({
@@ -694,7 +694,7 @@ router.post('/resetPasswordAdmin', (req, res) => {
               })
             }
           })
-        })
+        // })
       })
     } else {
       res.json({

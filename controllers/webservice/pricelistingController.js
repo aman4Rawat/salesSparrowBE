@@ -114,6 +114,11 @@ router.post('/get_all_pricelist', async (req, res) => {
   return res.json({ status: true, message: "data", result: price_list_data, count: count.length, pageLength: Math.ceil(count.length / limit) })
 })
 
+router.post('/get_all_pricelist/:id', async (req, res) => {
+  let pricelist = await PriceList.findById(req.params.id);
+  return res.json({ status: true, message: "data", result: pricelist })
+})
+
 router.delete('/delete_price_list', async (req, res) => {
   let id = req.body.id ? req.body.id : "";
   if (id == "") return res.json({ status: false, message: "Please select id" });

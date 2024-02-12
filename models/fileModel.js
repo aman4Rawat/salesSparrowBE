@@ -16,10 +16,6 @@ const file_schema = new mongoose.Schema(
     mediaUrl: {
       type: String,
     },
-    // website: {
-    //  name: {type: String, default: ""},
-    //  url: {type: String, default: ""}
-    // },
     websiteName: {
       type: String,
       default: "",
@@ -49,6 +45,7 @@ const file_schema = new mongoose.Schema(
       default: "Inactive",
     },
     pdf: [String],
+    videoUrl: String,
     feedBy: {
       type: String,
     },
