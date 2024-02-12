@@ -928,7 +928,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
           companyId: emp_data.companyId,
           roleId: {
             $in: roleIdArray,
-          }, // roleIdArray = team_role.map((team) => team?._id.toString())
+          }, // roleIdArray = team_role.map((team) => team?._id.toString()),
           is_delete: "0",
         })
           .limit(limit * 1)
@@ -941,6 +941,10 @@ router.post("/get_clients", protectTo, async (req, res) => {
           is_delete: "0",
         });
         for (let i = 0; i < team_data.length; i++) {
+          if ((team_data[i]._id).toString() === (emp_data._id).toString()) {
+            delete team_data[i];
+            continue;
+          }
           let state_data = await Location.findOne({
             id: team_data[i].headquarterState,
           });
