@@ -2,13 +2,14 @@ const express = require("express");
 const mongoose = require("mongoose");
 const opn = require("opn");
 const Unit = mongoose.model("Unit");
+// const { ObjectId } = require("mongodb");
 const Employee = mongoose.model("Employee");
 const Location = mongoose.model("Location");
 const Admin = mongoose.model("AdminInfo");
 const SharedMedia = mongoose.model("SharedMedia");
 const Lead = mongoose.model("Lead");
 const File = mongoose.model("File");
-const CustomerType = mongoose.model("CustomerType");
+// const CustomerType = mongoose.model("CustomerType");
 const LeadBanner = mongoose.model("LeadBanner");
 const Message = mongoose.model("Message");
 const Route = mongoose.model("Route");
@@ -759,11 +760,13 @@ router.post("/get_clients", protectTo, async (req, res) => {
           lead_grp_data = await lead_grp_data;
           let status;
           if (
-            get_date(lead_data[i].next_followup).split(" ")[0] == get_date().split(" ")[0]
+            get_date(lead_data[i].next_followup).split(" ")[0] ==
+            get_date().split(" ")[0]
           ) {
             status = "Today";
           } else if (
-            get_date(lead_data[i].next_followup).split(" ")[0] > get_date().split(" ")[0]
+            get_date(lead_data[i].next_followup).split(" ")[0] >
+            get_date().split(" ")[0]
           ) {
             status = "Upcoming";
           } else {
@@ -787,6 +790,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
             lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
             createdAt: lead_data[i].createdAt || "NA",
             followup_Status: status,
+            // last_follow_date: getDate(new Date(lead_data[i].next_followup).toLocaleString()) || "NA",
             last_follow_date: lead_data[i].next_followup || "NA",
           };
           list.push(u_data);
@@ -1195,7 +1199,7 @@ router.get("/leadProfile/:id", protectTo, async (req, res) => {
     status: true,
     message: "Data",
     data: {
-      lead: {...isExist, status},
+      lead: { ...isExist, status },
       followUpData: followUp,
       groupData,
     },
@@ -2226,7 +2230,7 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
   } catch (error) {
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
@@ -2423,7 +2427,7 @@ router.get("/sharedHistory/:id", protectTo, async (req, res) => {
   } catch (error) {
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
@@ -2505,7 +2509,7 @@ router.post("/activity", protectTo, async (req, res) => {
     console.log("error", error);
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
@@ -2552,7 +2556,7 @@ router.post("/listActivity", protectTo, async (req, res) => {
   } catch (error) {
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
@@ -2633,7 +2637,7 @@ router.post("/listActivity", protectTo, async (req, res) => {
 //   } catch (error) {
 //     return res.json({
 //       status: false,
-//       message: error.message,
+//        message: "Internal Server Error!",
 //     });
 //   }
 // });
@@ -2656,12 +2660,13 @@ router.put("/followUp", protectTo, async (req, res) => {
     if (date == "Invalid Date") {
       date = new Date();
     }
+    console.log("date", new Date(date).toLocaleString());
     // const dateAndTime = date;
     // time = date.split(" ")[1];
     // date = date.split(" ")[0];
 
     const leadData = await Lead.findOne({
-      _id: new mongoose.Schema.ObjectId(leadId),
+      _id: new mongoose.Types.ObjectId(leadId),
       assignToEmp: user_id,
     });
     if (!leadData) {
@@ -2694,7 +2699,7 @@ router.put("/followUp", protectTo, async (req, res) => {
     console.log("error", error);
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
@@ -2879,7 +2884,7 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
   } catch (error) {
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
@@ -2915,7 +2920,7 @@ router.delete("/lead/:id", protectTo, async (req, res) => {
   } catch (error) {
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
@@ -2955,7 +2960,7 @@ router.delete("/customer/:id", protectTo, async (req, res) => {
   } catch (error) {
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
@@ -2989,7 +2994,7 @@ router.delete("/party/:id", protectTo, async (req, res) => {
   } catch (error) {
     return res.json({
       status: false,
-      message: error.message,
+      message: "Internal Server Error!",
     });
   }
 });
