@@ -244,12 +244,14 @@ router.post("/category", userAuth, async (req, res) => {
             let oldData = await CatalogueCategory.findOne({ category_id })
             if (oldData) return res.json({ status: false, message: "category is already added!" })
             // if (!req.file) return res.status(201).json({ status: false, message: "File not found" });
+            if (!req.file) return res.status(201).json({ status: false, message: "File not found" });
 
             let category = await CatalogueCategory.create({
                 company_id: req.user._id,
                 category_id,
                 products,
                 // banner_img: `${base_url}${req.file.path}`,
+                banner_img: `${base_url}${req.file.path}`,
                 priority,
             });
             return res.json({ status: true, message: "Catalgue category created successfully", result: category, });
@@ -283,7 +285,7 @@ router.get("/category", getCompanyId, async (req, res) => {
         })
     } catch (error) {
         console.log(error)
-        // next(error)
+        next(error)
     }
 });
 
@@ -301,6 +303,7 @@ router.get("/category/:id", getCompanyId, async (req, res) => {
     } catch (error) {
         console.log(error)
         // next(error)
+        next(error)
     }
 });
 

@@ -172,6 +172,7 @@ router.post('/get_category_banner', async (req, res) => {
     const token = header.split(" ")[1];
     if (!token || token == "undefined") return res.json({ status: false, message: "Token is required!" });
 
+    
     let { category, page, limit } = req.body;
     page = page ? Number(page) : 1;
     limit = limit ? Number(limit) : 16;
