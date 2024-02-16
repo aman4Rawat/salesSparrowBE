@@ -2692,9 +2692,9 @@ router.post('/monthly_attendance_report_single_employee', async (req, res) => {
           beat: beat_data.beatName,
           check_in: "",
           check_out: ``,
-          purpose: attendance_data.activity_id || "NA",
+          purpose: attendance_data.activity_id,
           date: start_date,
-          attachment: attendance_data.selfie || "NA",
+          attachment: attendance_data.selfie,
         }
         main.push(u_data)
       } else {
@@ -2704,9 +2704,9 @@ router.post('/monthly_attendance_report_single_employee', async (req, res) => {
           check_in_location: location_data ? location_data.location[0].name : '',
           check_out: check_in_data ? check_in_data.check_out_time : "",
           check_out: check_in_data ? check_in_data.location2 : "",
-          purpose: attendance_data.activity_id || "NA",
+          purpose: attendance_data.activity_id,
           date: start_date,
-          attachment: attendance_data.selfie || "NA",
+          attachment: attendance_data.selfie,
         }
         main.push(u_data)
       }

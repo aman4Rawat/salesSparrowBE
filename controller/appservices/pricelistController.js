@@ -47,6 +47,12 @@ router.post('/get_all_pricelist', async (req, res) => {
     price_list_data.map((list) => list.pricelist_details.map(details => details.packing_details = JSON.parse(details.packing_details)))
     return res.json({ status: true, message: "data", result: price_list_data, count, pageLength: Math.ceil(count / limit) })
 })
+router.post('/get_all_pricelist/:id', async (req, res) => {
+    let pricelist = await PriceList.findById(req.params.id).lean();
+    console.log('first', pricelist)
+    pricelist.pricelist_details.map(details => details.packing_details = JSON.parse(details.packing_details));
+    return res.json({ status: true, message: "data", result: pricelist })
+})
 
 router.delete('/delete_price_list', async (req, res) => {
     let id = req.body.id ? req.body.id : "";

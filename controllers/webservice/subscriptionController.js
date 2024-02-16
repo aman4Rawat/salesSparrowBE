@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const SubscriptionPlan = mongoose.model("subs");
 const router = express.Router();
+const Admin = mongoose.model("AdminInfo");
+const PurchasedPlan = mongoose.model("PurchasedPlan");
 
 router.post('/addSubscription', async (req, res) => {
   console.log('add subscription');

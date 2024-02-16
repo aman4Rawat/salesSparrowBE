@@ -15,7 +15,9 @@ const Lead = mongoose.model("Lead");
 const Banner = mongoose.model("Banner");
 const Mapping = mongoose.model("Mapping");
 const SharedMedia = mongoose.model("SharedMedia");
+const LeadBanner = mongoose.model("LeadBanner");
 const Route = mongoose.model("Route");
+const PartyGroup = mongoose.model("PartyGrouping");
 const LeadGroup = mongoose.model("LeadGroup");
 const Message = mongoose.model("Message");
 // const Leadfollow = mongoose.model("leadfollow");
@@ -169,9 +171,18 @@ router.post("/lead_list", protectTo, async (req, res) => {
                   } else {
                     var emp_name = "";
                   }
-                  var leadfollow_data = await LeadFollowUp.findOne({
-                    lead_id: rowData._id,
-                  });
+                  // var leadfollow_data = await LeadFollowUp.findOne({
+                  //   lead_id: rowData._id,
+                  // });
+                  console.log("date compare", get_date(rowData.next_followup).split(" ")[0], get_date().split(" ")[0])
+                  let status;
+                  if (get_date(rowData.next_followup).split(" ")[0] == get_date().split(" ")[0]){
+                     status = "Today"
+                  } else if (get_date(rowData.next_followup).split(" ")[0] > get_date().split(" ")[0] ){
+                    status = "Upcoming"
+                  } else {
+                    status = "Overdue"
+                  }
                   var u_data = {
                     _id: rowData._id,
                     admin_id: rowData.admin_id,
@@ -181,9 +192,9 @@ router.post("/lead_list", protectTo, async (req, res) => {
                     email: rowData.email,
                     pincode: rowData.pincode,
                     state: rowData.state,
-                    last_follow_date: leadfollow_data
-                      ? leadfollow_data.Created_date
-                      : "",
+                    last_follow_date: rowData.last_followup || "",
+                    next_follow_date: rowData.next_followup || "",
+                    followup_Status: status || "N/A" ,
                     sate_name: sate_name ?? "",
                     city_name: city_name ?? "",
                     emp_name: emp_name ?? "",
@@ -886,204 +897,197 @@ router.post("/edit_lead_grp", async (req, res) => {
   }
 });
 
-router.post("/get_leads", async (req, res) => {
-  let token = req.get("Authorization") ? req.get("Authorization") : "";
-  let leadSource = req.body.leadSource ? req.body.leadSource : "";
-  let type = req.body.type ? req.body.type : "";
-  let page = req.body.page ? req.body.page : 1;
-  let limit = req.body.limit ? req.body.limit : 20;
-  if (token != "") {
-    const decoded = await getDecodedToken(token);
-    let user_id = decoded.user_id;
-    Admin.find({ _id: user_id })
-      .exec()
-      .then(async (user_info) => {
-        if (user_info.length < 1) {
-          res.status(401).json({
-            status: false,
-            message: "User not found !",
-            results: null,
-          });
-        } else {
-          if (type == "leadstage") {
-            let open = 0;
-            let contacted = 0;
-            let qualified = 0;
-            let won = 0;
-            let loose = 0;
-            let open_deal_value = 0;
-            let contacted_deal_value = 0;
-            let qualified_deal_value = 0;
-            let won_deal_value = 0;
-            let loose_deal_value = 0;
-            var condition = {};
-            condition.is_delete = "0";
-            if (leadSource != "") {
-              condition.leadSource = leadSource;
-            }
-            if (user_id != "") {
-              condition.company_id = user_id;
-            }
-            let lead_data = await Lead.find(condition)
-              .limit(limit * 1)
-              .skip((page - 1) * limit);
-            for (let i = 0; i < lead_data.length; i++) {
-              if (lead_data[i].lead_stage == "Open") {
-                open++;
-                open_deal_value += parseInt(lead_data[i].deal_value);
-              } else if (lead_data[i].lead_stage == "Contacted") {
-                contacted++;
-                contacted_deal_value += parseInt(lead_data[i].deal_value);
-              } else if (lead_data[i].lead_stage == "Qualified") {
-                qualified++;
-                qualified_deal_value += parseInt(lead_data[i].deal_value);
-              } else if (lead_data[i].lead_stage == "Won") {
-                won++;
-                won_deal_value += parseInt(lead_data[i].deal_value);
-              } else if (lead_data[i].lead_stage == "Loose") {
-                loose++;
-                loose_deal_value += parseInt(lead_data[i].deal_value);
-              }
-            }
-            let data = [
-              { open: { leads: open, deal_value: open_deal_value } },
-              {
-                contacted: {
-                  leads: contacted,
-                  deal_value: contacted_deal_value,
-                },
-              },
-              {
-                qualified: {
-                  leads: qualified,
-                  deal_value: qualified_deal_value,
-                },
-              },
-              { won: { leads: won, deal_value: won_deal_value } },
-              { loose: { leads: loose, deal_value: loose_deal_value } },
-            ];
-            return res.json({ status: true, message: "Data", result: data });
-          } else if (type == "leadpotential") {
-            let high = 0;
-            let medium = 0;
-            let low = 0;
-            var condition = {};
-            condition.is_delete = "0";
-            if (leadSource != "") {
-              condition.leadSource = leadSource;
-            }
-            if (user_id != "") {
-              condition.company_id = user_id;
-            }
-            let lead_data = await Lead.find(condition)
-              .limit(limit * 1)
-              .skip((page - 1) * limit);
-            for (let i = 0; i < lead_data.length; i++) {
-              if (lead_data[i].lead_potential == "Low") {
-                low++;
-              } else if (lead_data[i].lead_potential == "Medium") {
-                medium++;
-              } else if (lead_data[i].lead_potential == "High") {
-                high++;
-              }
-            }
-            let data = {
-              low: low,
-              medium: medium,
-              high: high,
-            };
-            return res.json({ status: true, message: "Data", result: data });
-          } else if (type == "customergrp") {
-            var condition = {};
-            condition.is_delete = "0";
-            if (leadSource != "") {
-              condition.leadSource = leadSource;
-            }
-            if (user_id != "") {
-              condition.company_id = user_id;
-            }
-            let list = [];
-            let lead_data = await Lead.find(condition)
-              .limit(limit * 1)
-              .skip((page - 1) * limit);
-            let lead_grp_data = await LeadGroup.find({
-              company_id: user_id,
-              is_delete: "0",
-            });
-            if (lead_grp_data.length < 1)
-              return res.json({
-                status: false,
-                message: "No Lead Groups",
-                result: [],
-              });
-            for (let i = 0; i < lead_grp_data.length; i++) {
-              let grps_lead_data = await LeadGroupItem.find({
-                grp_id: lead_grp_data[i]._id,
-              });
-              let u_data = {
-                lead_grp_name: lead_grp_data[i].grp_name,
-                leads: grps_lead_data.length,
-              };
-              list.push(u_data);
-            }
-            list.push({ total_leads: lead_data.length });
-            return res.json({ status: true, message: "Data", result: list });
-          } else if (type == "leadsourcelist") {
-            let facebook_leads = 0;
-            let instagram_leads = 0;
-            let indiamart_leads = 0;
-            let website_leads = 0;
-            let manual_leads = 0;
-            let tradeindia_leads = 0;
-            var condition = {};
-            condition.is_delete = "0";
-            if (leadSource != "") {
-              condition.leadSource = leadSource;
-            }
-            if (user_id != "") {
-              condition.company_id = user_id;
-            }
-            let lead_data = await Lead.find(condition)
-              .limit(limit * 1)
-              .skip((page - 1) * limit);
-            let total_lead_data = await Lead.find(condition);
-            let count = total_lead_data.length;
-            for (let i = 0; i < lead_data.length; i++) {
-              if (lead_data[i].leadSource == "Instagram") {
-                instagram_leads++;
-              } else if (lead_data[i].leadSource == "Facebook") {
-                facebook_leads++;
-              } else if (lead_data[i].leadSource == "IndiaMart") {
-                indiamart_leads++;
-              } else if (lead_data[i].leadSource == "TradeIndia") {
-                tradeindia_leads++;
-              } else if (lead_data[i].leadSource == "Website") {
-                website_leads++;
-              } else if (lead_data[i].leadSource == "Manual") {
-                manual_leads++;
-              }
-            }
-            let data = {
-              facebook: facebook_leads,
-              instagram: instagram_leads,
-              indiamart: indiamart_leads,
-              website: website_leads,
-              manual: manual_leads,
-              tradeindia: tradeindia_leads,
-            };
-            return res.json({
-              status: true,
-              message: "Data",
-              result: data,
-              page_length: Math.ceil(count / limit),
-            });
-          } else {
-            return res.json({ status: false, message: "No Data", result: [] });
-          }
-        }
+router.post("/get_leads", protectTo, async (req, res) => {
+  let {
+    leadSource = "",
+    type = "",
+    page = 1,
+    limit = 20,
+    assignToEmp = "",
+    month = 0,
+  } = req.body;
+
+  let user_id = req.loggedInUser.user_id;
+  const user_info = await Admin.findById(user_id);
+  if (!user_info) {
+    return errorHandler(res, 401, "User not found!");
+  }
+  let condition = { is_delete: "0" };
+  if (leadSource != "") {
+    condition.leadSource = leadSource;
+  }
+  if (assignToEmp != "") {
+    if (!mongoose.isValidObjectId(assignToEmp)) {
+      return errorHandler(res, 400, "Please provide valid employeeId");
+    }
+    condition.assignToEmp = assignToEmp;
+  }
+  if (month != "") {
+    if (![1, 3, 6, 12].includes(month)) {
+      month = 0;
+    }
+    const year = new Date().getFullYear();
+    const date = get_date(new Date(new Date(year, -month)));
+    condition.createdAt = { $gt: date };
+  }
+
+  if (type == "leadstage") {
+    let open = 0;
+    let contacted = 0;
+    let qualified = 0;
+    let won = 0;
+    let loose = 0;
+    let open_deal_value = 0;
+    let contacted_deal_value = 0;
+    let qualified_deal_value = 0;
+    let won_deal_value = 0;
+    let loose_deal_value = 0;
+    if (user_id != "") {
+      condition.company_id = user_id;
+    }
+    console.log("****condition**********", condition);
+    let lead_data = await Lead.find(condition)
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+    console.log("leaddata************", lead_data);
+    for (let i = 0; i < lead_data.length; i++) {
+      if (lead_data[i].lead_stage == "Open") {
+        open++;
+        open_deal_value += parseInt(lead_data[i].deal_value);
+      } else if (lead_data[i].lead_stage == "Contacted") {
+        contacted++;
+        contacted_deal_value += parseInt(lead_data[i].deal_value);
+      } else if (lead_data[i].lead_stage == "Qualified") {
+        qualified++;
+        qualified_deal_value += parseInt(lead_data[i].deal_value);
+      } else if (lead_data[i].lead_stage == "Won") {
+        won++;
+        won_deal_value += parseInt(lead_data[i].deal_value);
+      } else if (lead_data[i].lead_stage == "Loose") {
+        loose++;
+        loose_deal_value += parseInt(lead_data[i].deal_value);
+      }
+    }
+    let data = [
+      { open: { leads: open, deal_value: open_deal_value } },
+      {
+        contacted: {
+          leads: contacted,
+          deal_value: contacted_deal_value,
+        },
+      },
+      {
+        qualified: {
+          leads: qualified,
+          deal_value: qualified_deal_value,
+        },
+      },
+      { won: { leads: won, deal_value: won_deal_value } },
+      { loose: { leads: loose, deal_value: loose_deal_value } },
+    ];
+    return res.json({ status: true, message: "Data", result: data });
+  } else if (type == "leadpotential") {
+    let high = 0;
+    let medium = 0;
+    let low = 0;
+    condition.is_delete = "0";
+    if (user_id != "") {
+      condition.company_id = user_id;
+    }
+    let lead_data = await Lead.find(condition)
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+    for (let i = 0; i < lead_data.length; i++) {
+      if (lead_data[i].lead_potential == "Low") {
+        low++;
+      } else if (lead_data[i].lead_potential == "Medium") {
+        medium++;
+      } else if (lead_data[i].lead_potential == "High") {
+        high++;
+      }
+    }
+    let data = {
+      low: low,
+      medium: medium,
+      high: high,
+    };
+    return res.json({ status: true, message: "Data", result: data });
+  } else if (type == "customergrp") {
+    if (user_id != "") {
+      condition.company_id = user_id;
+    }
+    let list = [];
+    let lead_data = await Lead.find(condition)
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+    let lead_grp_data = await LeadGroup.find({
+      company_id: user_id,
+      is_delete: "0",
+    });
+    if (lead_grp_data.length < 1)
+      return res.json({
+        status: false,
+        message: "No Lead Groups",
+        result: [],
       });
+    for (let i = 0; i < lead_grp_data.length; i++) {
+      let grps_lead_data = await LeadGroupItem.find({
+        grp_id: lead_grp_data[i]._id,
+      });
+      let u_data = {
+        lead_grp_name: lead_grp_data[i].grp_name,
+        leads: grps_lead_data.length,
+      };
+      list.push(u_data);
+    }
+    list.push({ total_leads: lead_data.length });
+    return res.json({ status: true, message: "Data", result: list });
+  } else if (type == "leadsourcelist") {
+    let facebook_leads = 0;
+    let instagram_leads = 0;
+    let indiamart_leads = 0;
+    let website_leads = 0;
+    let manual_leads = 0;
+    let tradeindia_leads = 0;
+    if (user_id != "") {
+      condition.company_id = user_id;
+    }
+    let lead_data = await Lead.find(condition)
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+    let total_lead_data = await Lead.find(condition);
+    let count = total_lead_data.length;
+    for (let i = 0; i < lead_data.length; i++) {
+      if (lead_data[i].leadSource == "Instagram") {
+        instagram_leads++;
+      } else if (lead_data[i].leadSource == "Facebook") {
+        facebook_leads++;
+      } else if (lead_data[i].leadSource == "IndiaMart") {
+        indiamart_leads++;
+      } else if (lead_data[i].leadSource == "TradeIndia") {
+        tradeindia_leads++;
+      } else if (lead_data[i].leadSource == "Website") {
+        website_leads++;
+      } else if (lead_data[i].leadSource == "Manual") {
+        manual_leads++;
+      }
+    }
+    let data = {
+      facebook: facebook_leads,
+      instagram: instagram_leads,
+      indiamart: indiamart_leads,
+      website: website_leads,
+      manual: manual_leads,
+      tradeindia: tradeindia_leads,
+    };
+    return res.json({
+      status: true,
+      message: "Data",
+      result: data,
+      page_length: Math.ceil(count / limit),
+    });
   } else {
-    res.json({ status: false, message: "Token required!" });
+    return res.json({ status: false, message: "No Data", result: [] });
   }
 });
 
@@ -1102,8 +1106,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
     let sub_type = req.body.sub_type ? req.body.sub_type : "";
     if (sub_type == "retailers") {
       let { employee_id = "", beat_id = "" } = req.body;
-      let condition = {};
-      condition.company_id = user_id;
+      let condition = { company_id: user_id, is_delete: "0" };
       if (status != "") {
         condition.status = status;
       }
@@ -1136,6 +1139,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
               }
             }
             let u_data = {
+              _id: retailer_data[i]._id,
               customer_name: retailer_data[i].customerName,
               city: city_data.name,
               beat_name: x,
@@ -1168,6 +1172,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
             let city_data = Location.findOne({ id: route_data.city });
             let beat_data = await Beat.find({ _id: beat_id });
             let u_data = {
+              _id: retailer_list[0][i]._id,
               customer_name: retailer_list[0][i].customerName,
               city: city_data.name,
               beat_name: beat_data.beatName,
@@ -1213,6 +1218,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
               }
             }
             let u_data = {
+              _id: retailer_data[i]._id,
               customer_name: retailer_data[i].customerName,
               city: city_data.name,
               beat_name: x,
@@ -1246,6 +1252,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
             let city_data = Location.findOne({ id: route_data.city });
             let beat_data = await Beat.findOne({ _id: beat_id });
             let u_data = {
+              _id: retailer_list[0][i]._id,
               customer_name: retailer_list[0][i].customerName,
               city: city_data.name,
               beat_name: beat_data.beatName,
@@ -1264,8 +1271,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
         }
       }
     } else if (sub_type == "parties") {
-      let condition = {};
-      condition.company_id = user_id;
+      let condition = { company_id: user_id, is_delete: "0" };
       let party_type = req.body.party_type ? req.body.party_type : "";
       let status = req.body.status ? req.body.status : "";
       let state = req.body.state ? req.body.state : "";
@@ -1289,6 +1295,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
           id: party_data[i].city,
         });
         let u_data = {
+          _id: party_data[i]._id,
           party_name: party_data[i].firmName,
           city: city_data.name,
           mobile_number: party_data[i].mobileNo,
@@ -1367,13 +1374,13 @@ router.post("/get_clients", protectTo, async (req, res) => {
       });
       let emp_data = await Employee.findById(lead_data[i].assignToEmp);
       let lead_grp_data = await LeadGroup.findById(lead_data[i].customer_grp);
-      const currentDate = get_date();
-      var leadfollow_data = await LeadFollowUp.find({
-        lead: lead_data[i]._id,
-        date: { $lte: currentDate.split(" ")[0] },
-        time: { $lte: currentDate.split(" ")[1] },
-      });
-      console.log("***********leadFollowUpDate**********", leadfollow_data);
+      // const currentDate = get_date();
+      // var leadfollow_data = await LeadFollowUp.find({
+      //   lead: lead_data[i]._id,
+      //   date: { $lte: currentDate.split(" ")[0] },
+      //   time: { $lte: currentDate.split(" ")[1] },
+      // });
+      console.log("***********leadFollowUpDate**********", lead_data[i].last_followup);
       var u_data = {
         _id: lead_data[i]._id,
         company_id: lead_data[i].company_id,
@@ -1388,9 +1395,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
         lead_potential: lead_data[i].lead_potential,
         lead_stage: lead_data[i].lead_stage,
         lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
-        last_follow_date: !leadfollow_data.length
-          ? "NA"
-          : leadfollow_data[0].created_date,
+        last_follow_date: lead_data[i].last_followup || "NA",
         displayName: lead_data[i].displayName,
         email: lead_data[i].email,
         pincode: lead_data[i].pincode,
@@ -1407,46 +1412,96 @@ router.post("/get_clients", protectTo, async (req, res) => {
       total: count,
     });
   } else if (type == "groups") {
-    let list = [];
+    const { skip = 0, limit = 10 } = req.body;
+    // let list = [];
     let date = get_current_date().split(" ")[0];
-    let new_lead_data = await Lead.find({
-      company_id: user_id,
-      is_delete: "0",
-      date: date,
-    });
-    let new_leads = new_lead_data.length;
-    let grp_data = await LeadGroup.find({
-      company_id: user_id,
-      is_delete: "0",
-    })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    let total_grp_data = await LeadGroup.find({
-      company_id: user_id,
-      is_delete: "0",
-    });
-    let count = total_grp_data.length;
-    for (let i = 0; i < grp_data.length; i++) {
-      let leads_count = await LeadGroupItem.find({
-        grp_id: grp_data[i]._id,
-      });
-      let u_data = {
-        lead_grp_name: grp_data[i].grp_name,
-        id: grp_data[i]._id,
-        // lead_arr:leads_count?leads_count:[],
-        lead_grp_color: grp_data[i].colour,
-        leads: leads_count.length,
-      };
-      list.push(u_data);
-    }
+
+    const data = Promise.all([
+      Lead.countDocuments({
+        company_id: user_id,
+        is_delete: "0",
+        createdAt: { $gte: date },
+      }),
+      LeadGroup.find({
+        company_id: user_id,
+        is_delete: "0",
+      }),
+      LeadGroup.countDocuments({
+        company_id: user_id,
+        is_delete: "0",
+      }),
+      LeadFollowUp.find(
+        {
+          is_delete: "0",
+          updatedAt: { $gte: date },
+        },
+        { type: 1, description: 1, date: 1, time: 1, lead: 1 }
+      )
+        .skip(skip)
+        .limit(limit),
+    ]);
+
+    const new_leads = (await data)[0];
+    const grp_data = (await data)[1];
+    const count = (await data)[2];
+    const recentActivity = (await data)[3];
+
+    console.log("***data*****", new_leads, grp_data, count);
+    // await new_leads;
+    // await grp_data;
+    // await count;
+    // let new_lead_data = await Lead.find({
+    //   company_id: user_id,
+    //   is_delete: "0",
+    //   date: date,
+    // });
+    // let new_leads = new_lead_data.length;
+    // let grp_data = await LeadGroup.find({
+    //   company_id: user_id,
+    //   is_delete: "0",
+    // })
+    //   .limit(limit * 1)
+    //   .skip((page - 1) * limit);
+    // let count = await LeadGroup.countDocuments({
+    //   company_id: user_id,
+    //   is_delete: "0",
+    // });
+    const list = Promise.all(
+      grp_data.map((grp_data) => {
+        let leads_count = LeadGroupItem.find({
+          grp_id: grp_data._id,
+        });
+        return {
+          lead_grp_name: grp_data.grp_name,
+          id: grp_data._id,
+          // lead_arr:leads_count?leads_count:[],
+          lead_grp_color: grp_data.colour,
+          leads: leads_count.length,
+        };
+      })
+    );
+    // for (let i = 0; i < grp_data.length; i++) {
+    //   let leads_count = await LeadGroupItem.find({
+    //     grp_id: grp_data[i]._id,
+    //   });
+    //   let u_data = {
+    //     lead_grp_name: grp_data[i].grp_name,
+    //     id: grp_data[i]._id,
+    //     // lead_arr:leads_count?leads_count:[],
+    //     lead_grp_color: grp_data[i].colour,
+    //     leads: leads_count.length,
+    //   };
+    //   list.push(u_data);
+    // }
     // list.push({new_leads:new_leads})
     return res.json({
       status: true,
       message: "Data",
-      result: list,
+      result: await list,
       new_leads: new_leads,
       page_length: Math.ceil(count / limit),
       total: count,
+      recentActivity,
     });
   } else if (type == "teams") {
     let list = [];
@@ -1471,6 +1526,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
         emp_id: emp_data[i]._id,
         designation: role_data ? role_data.rolename : "NA",
         state: state_data.name,
+        phone: emp_data[i].phone || "NA",
       };
       list.push(u_data);
     }
@@ -1801,12 +1857,10 @@ router.post("/update_lead", async (req, res) => {
   }
 });
 
-router.delete("/delete_lead", async (req, res) => {
-  var token = req.get("Authorization") ? req.get("Authorization") : "";
-  let lead_id = req.body.lead_id ? req.body.lead_id : "";
-  const decoded = await getDecodedToken(token);
-  var user_id = decoded.user_id;
-  Admin.find({ _id: user_id })
+router.delete("/delete_lead", protectTo, async (req, res) => {
+  var user_id = req.loggedInUser.user_id;
+  const { lead_id } = req.body;
+  Admin.findById(user_id)
     .exec()
     .then(async (user_info) => {
       if (user_info.length < 1) {
@@ -1823,12 +1877,54 @@ router.delete("/delete_lead", async (req, res) => {
     });
 });
 
-router.delete("/delete_lead_grp", async (req, res) => {
-  var token = req.get("Authorization") ? req.get("Authorization") : "";
-  let grp_id = req.body.grp_id ? req.body.grp_id : "";
-  const decoded = await getDecodedToken(token);
-  var user_id = decoded.user_id;
-  Admin.find({ _id: user_id })
+router.delete("/customers", protectTo, async (req, res) => {
+  const user_id = req.loggedInUser.user_id;
+  let { type = "", id = "" } = req.body;
+  type = type.toUpperCase();
+  const com_data = await Admin.findById(user_id);
+  if (!com_data) {
+    return errorHandler(res, 401, "User not found!");
+  }
+  if (type == "" || !["RETAILER", "PARTY"].includes(type)) {
+    return errorHandler(res, 400, "Invalid customer type!");
+  }
+  if (id == "" || !mongoose.isValidObjectId(id)) {
+    return errorHandler(res, 400, "Please provide valid id");
+  }
+  switch (type) {
+    case "RETAILER":
+      const retailer = await Retailer.findOneAndUpdate(
+        { _id: id, company_id: com_data._id },
+        { is_delete: "1" }
+      );
+      if (!retailer) {
+        return errorHandler(res, 404, "User not found!");
+      }
+      break;
+    case "PARTY":
+      const party = await Party.findOneAndUpdate(
+        { _id: id, company_id: com_data._id },
+        { is_delete: "1" }
+      );
+      if (!party) {
+        return errorHandler(res, 404, "User not found!");
+      }
+      await PartyGroup.findOneAndUpdate(
+        { party_id: id, company_id: com_data._id },
+        { is_delete: "1" }
+      );
+      break;
+    default:
+      return errorHandler(res, 400, "Please provide valid customer type!");
+  }
+  return res
+    .status(200)
+    .json({ status: true, message: "Delete Successfully!" });
+});
+
+router.delete("/delete_lead_grp", protectTo, async (req, res) => {
+  const user_id = req.loggedInUser.user_id;
+  Admin.findById(user_id)
     .exec()
     .then(async (user_info) => {
       if (user_info.length < 1) {
@@ -1935,75 +2031,75 @@ router.delete("/delete_multiple_leads", async (req, res) => {
 //   }
 // })
 
-router.post("/manage_grp", async (req, res) => {
-  const token = req.get("Authorization") || "";
-  if (!token) {
-    return res.json({ status: false, message: "Please provide token" });
-  }
+// router.post("/manage_grp", async (req, res) => {
+//   const token = req.get("Authorization") || "";
+//   if (!token) {
+//     return res.json({ status: false, message: "Please provide token" });
+//   }
 
-  try {
-    const decoded = await getDecodedToken(token);
-    const userId = decoded.user_id;
+//   try {
+//     const decoded = await getDecodedToken(token);
+//     const userId = decoded.user_id;
 
-    const {
-      lead_id_arr = [],
-      key = "",
-      old_grp_id = "",
-      new_grp_id = "",
-    } = req.body;
-    if (lead_id_arr.length < 1) {
-      return res.json({
-        status: false,
-        message: "Please send at least one lead id",
-      });
-    }
-    if (!["remove", "change"].includes(key)) {
-      return res.json({ status: false, message: "Unknown action key" });
-    }
+//     const {
+//       lead_id_arr = [],
+//       key = "",
+//       old_grp_id = "",
+//       new_grp_id = "",
+//     } = req.body;
+//     if (lead_id_arr.length < 1) {
+//       return res.json({
+//         status: false,
+//         message: "Please send at least one lead id",
+//       });
+//     }
+//     if (!["remove", "change"].includes(key)) {
+//       return res.json({ status: false, message: "Unknown action key" });
+//     }
 
-    const date = get_current_date().split(" ")[0];
+//     const date = get_current_date().split(" ")[0];
 
-    switch (key) {
-      case "remove":
-        await Promise.all(
-          lead_id_arr.map((leadId) =>
-            LeadGroupItem.deleteMany({ grp_id: old_grp_id, lead_id: leadId })
-          )
-        );
-        return res.json({ status: true, message: "Deleted successfully" });
+//     switch (key) {
+//       case "remove":
+//         await Promise.all(
+//           lead_id_arr.map((leadId) =>
+//             LeadGroupItem.deleteMany({ grp_id: old_grp_id, lead_id: leadId })
+//           )
+//         );
+//         return res.json({ status: true, message: "Deleted successfully" });
 
-      case "change":
-        await Promise.all(
-          lead_id_arr.map((leadId) =>
-            LeadGroupItem.deleteMany({ grp_id: old_grp_id, lead_id: leadId })
-          )
-        );
-        await Promise.all(
-          lead_id_arr.map((leadId) =>
-            LeadGroupItem.create({
-              company_id: userId,
-              grp_id: new_grp_id,
-              lead_id: leadId,
-              date: date,
-              Created_date: get_current_date(),
-              Updated_date: get_current_date(),
-              status: "Active",
-            })
-          )
-        );
-        return res.json({
-          status: true,
-          message: "Lead group changed successfully",
-        });
+//       case "change":
+//         await Promise.all(
+//           lead_id_arr.map((leadId) =>
+//             LeadGroupItem.deleteMany({ grp_id: old_grp_id, lead_id: leadId })
+//           )
+//         );
+//         await Promise.all(
+//           lead_id_arr.map((leadId) =>
+//             LeadGroupItem.create({
+//               company_id: userId,
+//               grp_id: new_grp_id,
+//               lead_id: leadId,
+//               date: date,
+//               Created_date: get_current_date(),
+//               Updated_date: get_current_date(),
+//               status: "Active",
+//             })
+//           )
+//         );
+//         return res.json({
+//           status: true,
+//           message: "Lead group changed successfully",
+//         });
 
-      default:
-        return res.json({ status: false, message: "Unknown action key" });
-    }
-  } catch (err) {
-    console.log("Error", err);
-    return res.json({ status: false, message: "Something went wrong" });
-  }
-});
+//       default:
+//         return res.json({ status: false, message: "Unknown action key" });
+//     }
+//   } catch (err) {
+//     console.log("Error", err);
+//     return res.json({ status: false, message: "Something went wrong" });
+//   }
+// });
 
 // router.post('/manage_grp_lead',async (req,res)=>{
 //   const token = req.get('Authorization') || "";
@@ -2121,14 +2217,22 @@ router.post("/manage_grp_lead", async (req, res) => {
     const userId = decoded.user_id;
 
     const { lead_id_arr = [], key = "", new_grp_id = "" } = req.body;
+
     if (lead_id_arr.length < 1) {
-      return res.json({
-        status: false,
-        message: "Please send at least one lead id",
-      });
+      return errorHandler(res, 401, "Please send at least one lead id");
+    }
+    if (
+      !lead_id_arr.every((id) => mongoose.isValidObjectId(id)) ||
+      !mongoose.isValidObjectId(new_grp_id)
+    ) {
+      return errorHandler(res, 400, "Please provide valid group and lead");
     }
     if (!["change"].includes(key)) {
-      return res.json({ status: false, message: "Unknown action key" });
+      return errorHandler(res, 400, "Unknown action key");
+    }
+    let isGroupExist = await LeadGroup.findById(new_grp_id);
+    if (!isGroupExist) {
+      return errorHandler(res, 404, "Group not exist");
     }
 
     const date = get_current_date().split(" ")[0];
@@ -2191,10 +2295,15 @@ router.post("/assign_to_team", async (req, res) => {
     Created_date: new Date(),
     Updated_date: new Date(),
   }));
+  console.log("*************leadArray************", leadIdArr);
+  await Promise.all(
+    leadIdArr.map((leadId) =>
+      Lead.findByIdAndUpdate(leadId._id, { assignToEmp: emp_id })
+    )
+  );
 
   try {
     const result = await Mapping.insertMany(mappings);
-
     return res.json({ status: true, message: "Assigned successfully" });
   } catch (error) {
     console.error(error);
@@ -2417,25 +2526,25 @@ const upload = multer({
   storage: multer.memoryStorage({}),
   fileFilter: (req, file, cb) => {
     if (req.body.fileType.toUpperCase() == "PDF") {
-      if (!file.originalname.match(/\.(pdf)$/)) {
+      if (!file?.originalname.match(/\.(pdf)$/)) {
         return cb("File format is unsupported, please upload pdf file!");
       }
       cb(null, true);
-    } else if (!file.originalname.match(/\.(jpg|jpeg|png|pdf)$/)) {
+    } else if (
+      !file?.originalname.toLowerCase().match(/\.(jpg|jpeg|png|pdf)$/)
+    ) {
       console.log("file original name", file.originalname);
       return cb("File format is unsupported!");
     }
     cb(null, true);
   },
   limits: {
-    fileSize: 20971520, //((20 * 1024) KB * 1024) MB
+    fileSize: 52428800, //((100 * 1024) KB * 1024) MB
   },
-}).fields([
-  { name: "pdf", maxCount: 1 },
-  { name: "file", maxCount: 6 },
-]);
+}).fields([{ name: "pdf" }, { name: "file" }]);
 
 const { MulterError } = require("multer");
+const { error } = require("console");
 
 const multerErrorWrapper = (upload) => (req, res, next) => {
   try {
@@ -2467,6 +2576,7 @@ const multerErrorWrapper = (upload) => (req, res, next) => {
 router.post(
   "/file",
   protectTo,
+  fileExisted,
   multerErrorWrapper(upload),
   async (req, res) => {
     try {
@@ -2487,6 +2597,17 @@ router.post(
           status: false,
           message: "Please provide title and filetype",
         });
+      }
+
+      fileType = fileType.toUpperCase();
+      console.log("fileType", fileType);
+      const date = get_current_date().split(" ")[0];
+      const isFileExisted = await File.findOne({
+        title: new RegExp(title, "i"),
+        fileType,
+      });
+      if (isFileExisted) {
+        return errorHandler(res, 403, "File already exist with the title!");
       }
 
       if (mediaUrl) {
@@ -2511,23 +2632,30 @@ router.post(
         }
       }
 
-      fileType = fileType.toUpperCase();
-      console.log("fileType", fileType);
-      const date = get_current_date().split(" ")[0];
       if (fileType == "CATALOGUE") {
         if (req.files.file) {
+          const uniqueFile = [
+            ...new Set(req.files.file.map((element) => element.originalname)),
+          ];
           imageUrlData = Promise.all(
-            req.files.file.map((file) =>
-              writeImagePromise(file)
+            uniqueFile.map((name) =>
+              writeImagePromise(
+                req.files.file.find((file) => file.originalname === name)
+              )
                 .then((path) => path)
                 .catch((err) => err)
             )
           );
         }
         if (req.files.pdf) {
+          const uniqueFile = [
+            ...new Set(req.files.pdf.map((element) => element.originalname)),
+          ];
           pdfUrlData = Promise.all(
-            req.files.pdf.map((file) =>
-              writePdfPromise(file)
+            uniqueFile.map((name) =>
+              writePdfPromise(
+                req.files.pdf.find((pdf) => pdf.originalname === name)
+              )
                 .then((path) => path)
                 .catch((err) => err)
             )
@@ -2540,9 +2668,14 @@ router.post(
             message: "Please provide pdf",
           });
         }
+        const uniqueFile = [
+          ...new Set(req.files.pdf.map((element) => element.originalname)),
+        ];
         pdfUrlData = Promise.all(
-          req.files.pdf.map((file) =>
-            writePdfPromise(file)
+          uniqueFile.map((name) =>
+            writePdfPromise(
+              req.files.pdf.find((pdf) => pdf.originalname === name)
+            )
               .then((path) => path)
               .catch((err) => err)
           )
@@ -2556,6 +2689,7 @@ router.post(
 
       imageUrlData = (await imageUrlData) || null;
       pdfUrlData = (await pdfUrlData) || null;
+
       const file_data = File.create({
         title: title.trim(),
         description: fileType == "PDF" ? null : description,
@@ -2586,190 +2720,234 @@ router.post(
   }
 );
 
-router.put("/file", protectTo, multerErrorWrapper(upload), async (req, res) => {
+function fileExisted(req, res, next) {
   try {
-    console.log("file updating!");
-    const feedById = req.loggedInUser.user_id;
-    let imageUrlData = [];
-    let pdfUrlData = [];
-    console.log("req.files.file", req.files.file?.length);
-    console.log("req.files.pdf", req.files.pdf?.length);
-    let {
-      fileId = "",
-      title,
-      fileType = "",
-      status,
-      body,
-      description,
-      mediaUrl,
-      imageUrl = [],
-      websiteUrl,
-      websiteName,
-    } = req.body;
-    if (!fileId) {
-      return res.json({ status: false, message: "Please provide the id" });
-    }
-    if (!fileType) {
-      return res.json({
-        status: false,
-        message: "Please provide the file type",
-      });
-    }
-    fileType = fileType.toUpperCase();
-    let update_date = get_current_date();
-    let updated_file = { feedById, update_date };
+    fs.openSync("images/file", "r");
+    next();
+  } catch (error) {
+    fs.mkdirSync(error.path);
+    next();
+  }
+}
 
-    if (fileType == "CATALOGUE") {
-      if (req.files.file?.length) {
-        imageUrlData = Promise.all(
-          req.files.file.map((file) =>
-            writeImagePromise(file)
-              .then((path) => path)
-              .catch((err) => err)
-          )
-        );
+router.put(
+  "/file",
+  protectTo,
+  fileExisted,
+  multerErrorWrapper(upload),
+  async (req, res) => {
+    try {
+      const feedById = req.loggedInUser.user_id;
+      let imageUrlData = [];
+      let pdfUrlData = [];
+      let {
+        fileId = "",
+        title,
+        fileType = "",
+        status,
+        description,
+        mediaUrl,
+        imageUrl = [],
+        websiteUrl,
+        websiteName,
+      } = req.body;
+      if (!fileId) {
+        return res.json({ status: false, message: "Please provide the id" });
       }
-      if (req.files.pdf?.length) {
-        pdfUrlData = Promise.all(
-          req.files.pdf.map((file) =>
-            writePdfPromise(file)
-              .then((path) => path)
-              .catch((err) => err)
-          )
-        );
+      if (!fileType) {
+        return res.json({
+          status: false,
+          message: "Please provide the file type",
+        });
       }
-    } else if (fileType == "PDF") {
-      if (req.files.pdf?.length) {
-        pdfUrlData = Promise.all(
-          req.files.pdf.map((file) =>
-            writePdfPromise(file)
-              .then((path) => path)
-              .catch((err) => err)
-          )
-        );
-      }
-    }
+      fileType = fileType.toUpperCase();
+      let update_date = get_current_date();
+      let updated_file = { feedById, update_date };
 
-    if (imageUrl.length > 0) {
-      const strValid = new RegExp(
-        "^https://webservice.salesparrow.in/images/File/"
-      );
-      for (url of imageurl) {
-        if (!url.match(strValid)) {
+      console.log("********imageUrl**************", typeof imageUrl);
+      if (imageUrl.length > 0) {
+        imageUrl = JSON.parse(imageUrl);
+        console.log("********imageUrl**************", typeof imageUrl);
+        if (
+          !imageUrl.every((url) =>
+            url.startsWith("https://webservice.salesparrow.in/images/file/")
+          )
+        ) {
           return errorHandler(res, 400, "Invalid image url!");
         }
       }
-    }
 
-    imageUrlData = (await imageUrlData) || null;
-    pdfUrlData = (await pdfUrlData) || null;
-
-    if (imageUrlData.length) {
-      updated_file.images = imageUrlData.concat(imageUrl) || null;
-    }
-
-    if (pdfUrlData.length) {
-      updated_file.pdf = pdfUrlData || null;
-    }
-    if (description) {
-      updated_file.description = description || null;
-    }
-    if (title) {
-      updated_file.title = title;
-    }
-    if (mediaUrl) {
-      updated_file.mediaUrl = mediaUrl;
-    }
-    if (websiteUrl) {
-      updated_file.websiteUrl = websiteUrl;
-    }
-    if (websiteName) {
-      updated_file.websiteName = websiteName;
-    }
-    if (status) {
-      updated_file.status = status;
-    }
-    if (body) {
-      updated_file.body = body;
-    }
-    const updated_data = await File.findOneAndUpdate(
-      { _id: fileId },
-      updated_file,
-      {
-        new: true,
+      if (fileType == "CATALOGUE") {
+        if (req.files.file?.length) {
+          const uniqueFile = [
+            ...new Set(req.files.file.map((element) => element.originalname)),
+          ];
+          imageUrlData = Promise.all(
+            uniqueFile.map((name) =>
+              writeImagePromise(
+                req.files.file.find((file) => file.originalname === name)
+              )
+                .then((path) => path)
+                .catch((err) => err)
+            )
+          );
+        }
+        if (req.files.pdf?.length) {
+          const uniqueFile = [
+            ...new Set(req.files.pdf.map((element) => element.originalname)),
+          ];
+          pdfUrlData = Promise.all(
+            uniqueFile.map((name) =>
+              writePdfPromise(
+                req.files.pdf.find((pdf) => pdf.originalname === name)
+              )
+                .then((path) => path)
+                .catch((err) => err)
+            )
+          );
+        }
+      } else if (fileType == "PDF") {
+        if (req.files.pdf?.length) {
+          const uniqueFile = [
+            ...new Set(req.files.pdf.map((element) => element.originalname)),
+          ];
+          pdfUrlData = Promise.all(
+            uniqueFile.map((name) =>
+              writePdfPromise(
+                req.files.pdf.find((pdf) => pdf.originalname === name)
+              )
+                .then((path) => path)
+                .catch((err) => err)
+            )
+          );
+        }
       }
-    );
-    if (!updated_data) {
-      return res.json({ status: false, message: "Data not found!" });
-    }
-    return res.json({
-      status: true,
-      message: "Updated successfully",
-      data: await updated_data,
-    });
-  } catch (error) {
-    return res.json({
-      status: false,
-      message: error.message,
-    });
-  }
-});
 
-router.get("/file/:fileId/:userId", async (req, res) => {
+      imageUrlData = (await imageUrlData) || null;
+      pdfUrlData = (await pdfUrlData) || null;
+
+      if (imageUrlData.length) {
+        updated_file.images = imageUrl.concat(imageUrlData) || null;
+      }
+      if (pdfUrlData.length) {
+        updated_file.pdf = pdfUrlData || null;
+      }
+
+      if (description) {
+        updated_file.description = description || null;
+      }
+
+      if (title) {
+        updated_file.title = title;
+      }
+
+      if (mediaUrl) {
+        updated_file.mediaUrl = mediaUrl;
+      }
+
+      if (websiteUrl) {
+        updated_file.websiteUrl = websiteUrl;
+      }
+
+      if (websiteName) {
+        updated_file.websiteName = websiteName;
+      }
+
+      if (status) {
+        updated_file.status = status;
+      }
+
+      console.log("************updated_file********", updated_file);
+      const updated_data = await File.findByIdAndUpdate(fileId, updated_file, {
+        new: true,
+      });
+      if (!updated_data) {
+        return res.json({ status: false, message: "Data not found!" });
+      }
+      return res.json({
+        status: true,
+        message: "Updated successfully",
+        data: await updated_data,
+      });
+    } catch (error) {
+      return res.json({
+        status: false,
+        message: error.message,
+      });
+    }
+  }
+);
+
+router.get("/file/:fileId/:userId?", async (req, res) => {
   try {
     const { fileId = "", userId = "" } = req.params;
-    if (!fileId || !userId) {
-      return res.json({ status: false, message: "Invalid url!" });
-    }
-    const sharedData = await SharedMedia.findOne({
-      media: fileId,
-      sharedWith: userId,
-    });
-    if (!sharedData) {
+    let fileData;
+    if (fileId && !userId) {
+      fileData = await File.findById(fileId);
+      if (!fileData) {
+        fileData = await LeadBanner.findById(fileId);
+        if (!fileData) {
+          return res.json({ status: false, message: "File not found!" });
+        }
+      }
       return res.json({
-        status: false,
-        message: "Media not found!",
+        status: true,
+        data: fileData,
       });
-    }
-    let userData = {};
-    if (sharedData.userType.toUpperCase() == "LEAD") {
-      userData = await Lead.findById({ _id: userId });
-      if (!userData) {
-        return res.json({ status: false, message: "User not found!" });
-      }
-    } else if (sharedData.userType.toUpperCase() == "PARTY") {
-      userData = await Party.findById({ _id: userId });
-      if (!userData) {
-        return res.json({ status: false, message: "User not found!" });
-      }
-    } else if (sharedData.userType.toUpperCase() == "RETAILER") {
-      userData = await Retailer.findById({ _id: userId });
-      if (!userData) {
-        return res.json({ status: false, message: "User not found!" });
-      }
     } else {
+      if (!fileId || !userId) {
+        return res.json({ status: false, message: "Invalid url!" });
+      }
+      const sharedData = await SharedMedia.findOne({
+        media: fileId,
+        sharedWith: userId,
+      });
+      if (!sharedData) {
+        return res.json({
+          status: false,
+          message: "Media not found!",
+        });
+      }
+      let userData = {};
+      if (sharedData.userType.toUpperCase() == "LEAD") {
+        userData = await Lead.findById({ _id: userId });
+        if (!userData) {
+          return res.json({ status: false, message: "User not found!" });
+        }
+      } else if (sharedData.userType.toUpperCase() == "PARTY") {
+        userData = await Party.findById({ _id: userId });
+        if (!userData) {
+          return res.json({ status: false, message: "User not found!" });
+        }
+      } else if (sharedData.userType.toUpperCase() == "RETAILER") {
+        userData = await Retailer.findById({ _id: userId });
+        if (!userData) {
+          return res.json({ status: false, message: "User not found!" });
+        }
+      } else {
+        return res.json({
+          status: false,
+          message: "Invalid url!",
+        });
+      }
+      fileData = await File.findById(fileId);
+      if (!fileData) {
+        return res.json({ status: false, message: "File not found!" });
+      }
+      await SharedMedia.findOneAndUpdate(
+        { media: fileId, sharedWith: userId, userType: sharedData.userType },
+        {
+          opened: true,
+          unopened: false,
+          $inc: { openCount: 1 },
+        }
+      );
+      console.log("inside view file function", req.params);
       return res.json({
-        status: false,
-        message: "Invalid url!",
+        status: true,
+        data: fileData,
       });
     }
-    const fileData = await File.findById({ _id: fileId });
-    if (!fileData) {
-      return res.json({ status: false, message: "File not found!" });
-    }
-    await SharedMedia.findOneAndUpdate(
-      { media: fileId, sharedWith: userId, userType: sharedData.userType },
-      {
-        opened: true,
-        unopened: false,
-        $inc: { openCount: 1 },
-      }
-    );
-    console.log("inside view file function", req.params);
-    return res.json({
-      status: true,
-      data: fileData,
-    });
   } catch (error) {
     res.json({ status: false, message: error.message });
   }
@@ -2814,7 +2992,7 @@ router.get("/file", protectTo, async (req, res) => {
       });
     } else {
       const [file_data, total_file_count] = await Promise.all([
-        File.find(filter).limit(limit).skip(skip).sort({ _id: -1 }),
+        File.find(filter).limit(limit).skip(skip).sort({ created_date: -1 }),
         File.countDocuments(filter),
       ]);
       console.log("filter2", filter);
@@ -2837,34 +3015,34 @@ router.get("/file", protectTo, async (req, res) => {
   }
 });
 
-router.delete("/file/deleteMedia", protectTo, async (req, res) => {
-  // const { type = "", url = "" } = req.body;
-  const { type = "", url = "", id = "" } = req.body;
-  const urlCase = "https://webservice.salesparrow.in/images/File/";
-  const typeCase = ["images", "pdf"];
-  let condition = {};
-  console.log("helolo", type, url, id);
-  if (!type || !url || !id) {
-    return errorHandler(res, 400, "Please provide required data!");
-  }
-  if (!url || !url.match(urlCase)) {
-    return errorHandler(res, 400, "Please provide valid url!");
-  }
-  if (!typeCase.includes(type)) {
-    return errorHandler(res, 400, "Please provide valid type!");
-  }
-  if (type === "images") {
-    condition = { $pull: { images: url } };
-  } else if (type === "pdf") {
-    condition = { $pull: { pdf: url } };
-  }
-  const file = await File.findByIdAndUpdate(id, condition, { new: true });
-  console.log(file);
-  return res.json({
-    status: false,
-    message: "delete successfully!",
-  });
-});
+// router.delete("/file/deleteMedia", protectTo, async (req, res) => {
+//   // const { type = "", url = "" } = req.body;
+//   const { type = "", url = "", id = "" } = req.body;
+//   const urlCase = "https://webservice.salesparrow.in/images/File/";
+//   const typeCase = ["images", "pdf"];
+//   let condition = {};
+//   console.log("helolo", type, url, id);
+//   if (!type || !url || !id) {
+//     return errorHandler(res, 400, "Please provide required data!");
+//   }
+//   if (!url || !url.match(urlCase)) {
+//     return errorHandler(res, 400, "Please provide valid url!");
+//   }
+//   if (!typeCase.includes(type)) {
+//     return errorHandler(res, 400, "Please provide valid type!");
+//   }
+//   if (type === "images") {
+//     condition = { $pull: { images: url } };
+//   } else if (type === "pdf") {
+//     condition = { $pull: { pdf: url } };
+//   }
+//   const file = await File.findByIdAndUpdate(id, condition, { new: true });
+//   console.log(file);
+//   return res.json({
+//     status: false,
+//     message: "delete successfully!",
+//   });
+// });
 
 router.delete("/file/:id", protectTo, async (req, res) => {
   try {
@@ -2900,10 +3078,10 @@ const writePdfPromise = function (file) {
     "." +
     file.originalname.substr(file.originalname.lastIndexOf(".") + 1);
   return new Promise((resolve, reject) => {
-    fs.writeFile(`./images/File/${fileName}`, file.buffer, (err) => {
+    fs.writeFile(`images/file/${fileName}`, file.buffer, (err) => {
       if (err) reject(err);
       else {
-        resolve(`${getBaseUrl()}images/File/${fileName}`);
+        resolve(`${getBaseUrl()}images/file/${fileName}`);
       }
     });
   });
@@ -2923,10 +3101,10 @@ const writeImagePromise = function (file) {
   return new Promise((resolve, reject) => {
     sharp(file.buffer)
       .resize(320, 240)
-      .toFile(`${getBaseUrl()}/images/File/${fileName}`, (err) => {
+      .toFile(`images/file/${fileName}`, (err) => {
         if (err) reject(err);
         else {
-          resolve(`${getBaseUrl()}images/File/${fileName}`);
+          resolve(`${getBaseUrl()}images/file/${fileName}`);
         }
       });
   });
@@ -2953,7 +3131,12 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
     if (!com_data) {
       return res.status(401).json({ status: false, message: "No user found!" });
     }
-    let { sharedWith = "", userType = "", media = "" } = req.body;
+    let {
+      sharedWith = "",
+      userType = "",
+      media = "",
+      type = "FILE",
+    } = req.body;
     if (!sharedWith || !userType || !media) {
       return res.json({
         status: false,
@@ -2962,11 +3145,17 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
             ? "user data whom to share"
             : !userType
             ? "type of user"
+            : !type
+            ? "type"
             : "media url"
         }`,
       });
     }
-    userType = userType?.toUpperCase();
+    if (!mongoose.isValidObjectId(media)) {
+      return errorHandler(res, 400, "Provide valid media!");
+    }
+    userType = userType?.trim().toUpperCase();
+    type = type?.trim().toUpperCase();
     if (userType == "LEAD") {
       userType = "Lead";
       let userData = await Lead.findOne({
@@ -2997,29 +3186,38 @@ router.post("/sharedMedia", protectTo, async (req, res) => {
     } else {
       return errorHandler(res, 400, "Please provide valid userType!");
     }
-    // const url =
-    //   "https://crm.salesparrow.in/" +
-    //   "preview/" +
-    //   `${media + "/" + sharedWith}`;
-    const url =
-      "localhost:3000/whatsapp-preview/" + `${media + "/" + sharedWith}`;
-    const updateShareCount = await File.findByIdAndUpdate(
-      { _id: media },
-      { $inc: { sharedCount: 1 } },
-      { new: true }
-    );
-    console.log("updateShareCount", updateShareCount);
+    const url = `https://crm.salesparrow.in/whatsapp-preview/${
+      media + "/" + sharedWith
+    }`;
+    let file = await File.findById(media);
+    if (!file) {
+      file = await LeadBanner.findById(media);
+      if (!file) {
+        return errorHandler(res, 400, "File not found!");
+      }
+    }
+    if (type === "FILE") {
+      const updateShareCount = await File.findByIdAndUpdate(
+        { _id: media },
+        { $inc: { sharedCount: 1 } },
+        { new: true }
+      );
+      console.log("updateShareCount", updateShareCount);
+    }
     const sharedMedia = await SharedMedia.create({
       sharedBy: {
         _id: company_id,
         by: "COMPANY",
       },
+      preview: ``,
       company_id,
       sharedWith,
       userType,
       media,
+      type,
     });
-    if (!sharedMedia) res.json({ status: false, message: "Try again!" });
+
+    if (!sharedMedia) return errorHandler(res, 500, "Try again!");
     res.json({ status: true, url });
   } catch (error) {
     return res.json({
@@ -3081,10 +3279,11 @@ router.get("/sharedHistory/:id", protectTo, async (req, res) => {
   }
 });
 
-// FOLLOW_UP SUB-MODULE
-router.post("/followUp", protectTo, async (req, res) => {
+// Activity SUB-MODULE
+router.post("/activity", protectTo, async (req, res) => {
   try {
     const user_id = req.loggedInUser.user_id;
+    let time = "";
     let { type = "", description = "", date = "", leadId = "" } = req.body;
     if (!leadId) {
       return res.status(401).json({
@@ -3106,18 +3305,30 @@ router.post("/followUp", protectTo, async (req, res) => {
     if (!admin) {
       return errorHandler(res, 401, "Not Authorized!");
     }
+    date = get_date(new Date(date));
+    const dateAndTime = date;
+    time = date.split(" ")[1];
+    date = date.split(" ")[0];
+    const isExisted = await LeadFollowUp.findOne({
+      company_id: user_id,
+      type,
+      date,
+      time,
+    });
+    if (isExisted) {
+      return errorHandler(res, 403, "FollowUp already exist!");
+    }
     const lead_data = await Lead.findById({ _id: leadId });
     if (!lead_data) {
       return errorHandler(res, 404, "Lead not found!");
     }
     // console.log("adminData", admin);
-    date = get_date(new Date(date));
-    console.log("**********date***********", date);
     const followup = await LeadFollowUp.create({
       type,
       description,
-      date: date.split(" ")[0],
-      time: date.split(" ")[1],
+      date,
+      dateAndTime,
+      time,
       lead: leadId,
       admin: lead_data.assignToEmp || user_id,
       company_id: admin._id,
@@ -3134,6 +3345,64 @@ router.post("/followUp", protectTo, async (req, res) => {
     return res.status(201).json({
       status: true,
       message: "Data created successfully!",
+    });
+  } catch (error) {
+    console.log("error", error);
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+});
+
+router.put("/followUp", protectTo, async (req, res) => {
+  try {
+    const user_id = req.loggedInUser.user_id;
+    let { date, leadId } = req.body;
+    if (!leadId || !date || !mongoose.isValidObjectId(leadId)) {
+      return res.status(401).json({
+        status: false,
+        message: "lead_id and date require !",
+      });
+    }
+    const admin = await Admin.findById({ _id: user_id });
+    if (!admin) {
+      return errorHandler(res, 401, "Not Authorized!");
+    }
+    date = new Date(date);
+    if (date == "Invalid Date") {
+      date = new Date();
+    }
+    // const dateAndTime = date;
+    // time = date.split(" ")[1];
+    // date = date.split(" ")[0];
+
+    const leadData = await Lead.findById(leadId);
+    if (!leadData) {
+      return errorHandler(res, 200, "Lead not found!");
+    }
+    const updateFollowup = await Lead.findByIdAndUpdate(
+      leadId,
+      { next_followup: date, last_followup: leadData.next_followup },
+      { new: true }
+    );
+    if (!updateFollowup) {
+      return errorHandler(res, 403, "FollowUp not updated!");
+    }
+    console.log("followUp", {
+      after: {
+        next_followup: updateFollowup.next_followup,
+        last_followup: updateFollowup.last_followup,
+      },
+      before: {
+        next_followup: leadData.next_followup,
+        last_followup: leadData.last_followup,
+      },
+    });
+    return res.status(201).json({
+      status: true,
+      message: "followUp updated successfully!",
+      date: updateFollowup
     });
   } catch (error) {
     console.log("error", error);
@@ -3176,14 +3445,14 @@ router.post("/listFollowUp", protectTo, async (req, res) => {
     const lead_g_data = await LeadFollowUp.find(condition)
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .sort({ date: 1, time: 1 });
+      .sort({ dateAndTime: -1 });
 
     return res.json({
       status: true,
       message: "Data Found",
       pageLength: Math.ceil(totalData / limit),
       count: totalData,
-      Data: lead_g_data,
+      data: lead_g_data,
     });
   } catch (error) {
     return res.json({
@@ -3193,144 +3462,220 @@ router.post("/listFollowUp", protectTo, async (req, res) => {
   }
 });
 
-router.put("/followUp", protectTo, async (req, res) => {
-  try {
-    console.log("body", req.body);
-    let { type = "", description = "", date = "", id = "" } = req.body;
+// router.put("/activity", protectTo, async (req, res) => {
+//   try {
+//     console.log("body", req.body);
+//     let { type = "", description = "", date = "", id = "" } = req.body;
 
-    console.log("type description", type, description);
-    if (!id) {
+//     console.log("type description", type, description);
+//     if (!id) {
+//       return res.json({
+//         status: false,
+//         message: "followUp id require !",
+//       });
+//     }
+//     var user_id = req.loggedInUser.user_id;
+//     const admin = await Admin.findOne({ _id: user_id, is_deleted: "0" });
+//     if (!admin) {
+//       return res.status(401).json({
+//         status: false,
+//         message: "User not found !",
+//       });
+//     }
+//     let updatingData = {};
+//     updatingData.Updated_date = get_current_date();
+//     if (type) {
+//       type = type.toUpperCase();
+//       if (!["PHONE", "NOTE", "MEETING", "MESSAGE"].includes(type)) {
+//         return res.status(401).json({
+//           status: false,
+//           message: "Please provide valid type",
+//         });
+//       }
+//       updatingData.type = type;
+//     }
+//     const isExist = await LeadFollowUp.findById(id);
+
+//     if (!isExist) {
+//       return errorHandler(res, 404, "No followup found");
+//     }
+//     if (description) {
+//       updatingData.description = description.trim();
+//     }
+
+//     if (date) {
+//       date = get_date(new Date(date));
+//       updatingData.date = date.split(" ")[0].split("/").join("-");
+//       if (date.split(" ")[1]) {
+//         updatingData.time = date.split(" ")[1];
+//       }
+//     }
+//     const newDate = updatingData.date + " " + updatingData.time;
+//     console.log("*********date adn time*********", newDate);
+//     updatingData.dateAndTime = new Date(newDate);
+
+//     console.log("updatingData", updatingData);
+//     const followUp = await LeadFollowUp.findByIdAndUpdate(
+//       { _id: id },
+//       updatingData,
+//       { new: true }
+//     );
+//     console.log("updated followUp", followUp);
+//     if (!followUp) {
+//       return res.status(400).json({
+//         status: true,
+//         message: "Please provide valid id!",
+//       });
+//     }
+//     return res.status(200).json({
+//       status: true,
+//       message: "Update successfully",
+//       results: followUp,
+//     });
+//   } catch (error) {
+//     return res.json({
+//       status: false,
+//       message: error.message,
+//     });
+//   }
+// });
+
+router.post("/listFollowUpLogs", protectTo, async (req, res) => {
+  try {
+    let { limit = 10, skip = 0, key = "ALL", filtered = "ALL" } = req.body;
+    const company_id = req.loggedInUser.user_id;
+    const currentDate = new Date(Date.now());
+    const upcomingDate = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+    console.log("date", currentDate, upcomingDate)
+    let data = [];
+    let count = 0;
+    key = key?.trim().toUpperCase();
+    switch (key) {
+      case "LEADS":
+        filtered = "LEADS";
+        data = await Lead.find({ company_id, is_delete: "0" })
+          .skip(skip)
+          .limit(limit);
+        break;
+      case "OVERDUE":
+        filtered = "OVERDUE";
+        data = await Lead.find({
+          company_id,
+          next_followup: { $lt: currentDate },
+        })
+          .skip(skip)
+          .limit(limit);
+        break;
+      case "TODAY":
+        filtered = "TODAY";
+        data = await Lead.find({
+          company_id,
+          next_followup: { $eq: currentDate },
+        })
+          .skip(skip)
+          .limit(limit);
+        break;
+      case "UPCOMING":
+        filtered = "UPCOMING";
+        data = await Lead.find({
+          company_id,
+          next_followup: {
+            $gt: currentDate,
+            $lt: upcomingDate,
+          },
+        })
+          .skip(skip)
+          .limit(limit);
+        break;
+      case "ALL":
+        data = await Lead.aggregate([
+          {
+            $match: { company_id },
+          },
+          // {
+          //   $lookup: {
+          //     from: "leads",
+          //     localField: "lead",
+          //     foreignField: "_id",
+          //     as: "lead",
+          //   },
+          // },
+          {
+            $facet: {
+              overdue: [
+                {
+                  $match: {
+                    next_followup: { $lt: currentDate },
+                  },
+                },
+                {
+                  $count: "overdueCount",
+                },
+              ],
+              upcoming: [
+                {
+                  $match: {
+                    next_followup: {
+                      $gt: currentDate,
+                      $lt: upcomingDate,
+                    },
+                  },
+                },
+                {
+                  $count: "upcomingCount",
+                },
+              ],
+              today: [
+                {
+                  $match: {
+                    next_followup: { $eq: currentDate },
+                  },
+                },
+                {
+                  $count: "todayCount",
+                },
+              ],
+            },
+          },
+          {
+            $project: {
+              overdue: { $arrayElemAt: ["$overdue.overdueCount", 0] },
+              upcoming: { $arrayElemAt: ["$upcoming.upcomingCount", 0] },
+              today: { $arrayElemAt: ["$today.todayCount", 0] },
+            },
+          },
+        ]);
+        break;
+      default:
+        "Please provide valid key";
+    }
+
+    if (key === "ALL") {
+      const { overdue = [], upcoming = [], today = [] } = data[0];
+      return res.json({
+        status: true,
+        data: {
+          overdue: overdue.length == 0 ? 0 : overdue,
+          upcoming: upcoming.length == 0 ? 0 : upcoming,
+          today: today.length == 0 ? 0 : today,
+        },
+      });
+    } else if (!count) {
       return res.json({
         status: false,
-        message: "followUp id require !",
+        message: "Data not found!",
       });
-    }
-    var user_id = req.loggedInUser.user_id;
-    const admin = await Admin.findOne({ _id: user_id, is_deleted: "0" });
-    if (!admin) {
-      return res.status(401).json({
-        status: false,
-        message: "User not found !",
-      });
-    }
-    let updatingData = {};
-    updatingData.Updated_date = get_current_date();
-    if (type) {
-      type = type.toUpperCase();
-      if (!["PHONE", "NOTE", "MEETING", "MESSAGE"].includes(type)) {
-        return res.status(401).json({
-          status: false,
-          message: "Please provide valid type",
-        });
-      }
-      updatingData.type = type;
-    }
-    if (description) {
-      updatingData.description = description.trim();
-    }
-    if (date) {
-      date = get_date(new Date(date));
-      updatingData.date = date.split(" ")[0].split("/").join("-");
-      if (date.split(" ")[1]) {
-        updatingData.time = date.split(" ")[1];
-      }
-    }
-    console.log("updatingData", updatingData);
-    const followUp = await LeadFollowUp.findByIdAndUpdate(
-      { _id: id },
-      updatingData,
-      { new: true }
-    );
-    console.log("updated followUp", followUp);
-    if (!followUp) {
-      return res.status(400).json({
+    } else {
+      count = data.length;
+      return res.json({
         status: true,
-        message: "Please provide valid id!",
+        message: "Data Found",
+        filtered,
+        pageLength: Math.ceil(count / limit),
+        count,
+        data,
       });
     }
-    return res.status(200).json({
-      status: true,
-      message: "Update successfully",
-      results: followUp,
-    });
-  } catch (error) {
-    return res.json({
-      status: false,
-      message: error.message,
-    });
-  }
-});
-
-router.get("/listFollowUpLogs", protectTo, async (req, res) => {
-  try {
-    const company_id = req.loggedInUser.user_id;
-    const currentDate = get_date().split(" ")[0];
-    const upcomingDate = get_date(
-      new Date(Date.now() + 7 * 24 * 3600 * 1000)
-    ).split(" ")[0];
-
-    const combinedCounts = await LeadFollowUp.aggregate([
-      {
-        $match: { company_id },
-      },
-      {
-        $lookup: {
-          from: "leads",
-          localField: "lead",
-          foreignField: "_id",
-          as: "lead",
-        },
-      },
-      {
-        $facet: {
-          overdue: [
-            {
-              $match: {
-                date: { $lt: `${currentDate}` },
-              },
-            },
-            // {
-            //   $count: "overdueCount",
-            // },
-          ],
-          upcoming: [
-            {
-              $match: {
-                date: { $gte: `${currentDate}`, $lt: `${upcomingDate}` },
-              },
-            },
-            // {
-            //   $count: "upcomingCount",
-            // },
-          ],
-          someDay: [
-            {
-              $match: {
-                date: { $gte: `${upcomingDate}` },
-              },
-            },
-            // {
-            //   $count: "someDayCount",
-            // },
-          ],
-        },
-      },
-      // {
-      //   $project: {
-      //     overdue: { $arrayElemAt: ["$overdue.overdueCount", 0] },
-      //     upcoming: { $arrayElemAt: ["$upcoming.upcomingCount", 0] },
-      //     someDay: { $arrayElemAt: ["$someDay.someDayCount", 0] },
-      //   },
-      // },
-    ]);
-
-    const { overdue, upcoming, someDay } = combinedCounts[0];
-    return res.json({
-      status: true,
-      data: {
-        ...combinedCounts[0],
-      },
-    });
   } catch (error) {
     return res.json({
       status: false,
@@ -3347,7 +3692,11 @@ function get_date(today = new Date()) {
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const yyyy = today.getFullYear();
   const time =
-    String(today.getHours()).padStart(2, "0") + ":" + String(today.getMinutes()).padStart(2, "0") + ":" + String(today.getSeconds()).padStart(2, "0");
+    String(today.getHours()).padStart(2, "0") +
+    ":" +
+    String(today.getMinutes()).padStart(2, "0") +
+    ":" +
+    String(today.getSeconds()).padStart(2, "0");
   return (today = yyyy + "-" + mm + "-" + dd + " " + time);
 }
 

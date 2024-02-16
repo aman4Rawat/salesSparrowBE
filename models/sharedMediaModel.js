@@ -35,6 +35,10 @@ const sharedMedia_Model = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  type: {
+    type: String,
+    required: true
+  },
   company_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Admin",
