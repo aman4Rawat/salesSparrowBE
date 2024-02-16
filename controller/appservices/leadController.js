@@ -14,7 +14,7 @@ const Message = mongoose.model("Message");
 const Route = mongoose.model("Route");
 const LeadGroup = mongoose.model("LeadGroup");
 // const Leadfollow = mongoose.model("leadfollow");
-const LeadFollowUp = mongoose.model("FollowUp");
+const LeadActivity = mongoose.model("FollowUp");
 const LeadGroupItem = mongoose.model("LeadGroupItem");
 const Role = mongoose.model("role");
 const Party = mongoose.model("Party");
@@ -818,7 +818,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
             company_id: emp_data.companyId,
             is_delete: "0",
           }),
-          // LeadFollowUp.find({
+          // LeadActivity.find({
           //   is_delete: "0",
           //   updatedAt: { $gte: date },
           // })
@@ -833,7 +833,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
         let recentActivity = 0;
         if (emp_leads.length) {
           let leads_arr = emp_leads.map((lead) => lead._id);
-          recentActivity = await LeadFollowUp.find({
+          recentActivity = await LeadActivity.find({
             lead: { $in: leads_arr },
             updatedAt: { $gte: date },
           });
@@ -1186,17 +1186,17 @@ router.get("/leadProfile/:id", protectTo, async (req, res) => {
     is_delete: "0",
   });
 
-  // const followUp = await LeadFollowUp.find({
-  //   lead: new mongoose.Types.ObjectId(id),
-  //   is_delete: "0",
-  // }).sort({ dateAndTime: 1 });
+  const followUp = await LeadActivity.find({
+    lead: new mongoose.Types.ObjectId(id),
+    is_delete: "0",
+  }).sort({ dateAndTime: 1 });
 
   return res.json({
     status: true,
     message: "Data",
     data: {
       lead: {...isExist, status},
-      // followUpData: followUp,
+      followUpData: followUp,
       groupData,
     },
   });
@@ -2311,8 +2311,8 @@ router.post("/lead_list", protectTo, async (req, res) => {
         } else {
           var emp_name = "";
         }
-        const currentDate = get_date();
-        // var leadfollow_data = await LeadFollowUp.find({
+        // const currentDate = get_date();
+        // var leadfollow_data = await LeadActivity.find({
         //   lead: lead_data[i]._id,
         //   date: { $lte: currentDate.split(" ")[0] },
         //   time: { $lte: currentDate.split(" ")[1] },
@@ -2469,7 +2469,7 @@ router.post("/activity", protectTo, async (req, res) => {
     const dateAndTime = date;
     time = date.split(" ")[1];
     date = date.split(" ")[0];
-    const isExisted = await LeadFollowUp.findOne({
+    const isExisted = await LeadActivity.findOne({
       company_id: emp_data.companyId,
       type,
       date,
@@ -2482,7 +2482,7 @@ router.post("/activity", protectTo, async (req, res) => {
     }
 
     console.log("adminData", emp_data);
-    const followup = await LeadFollowUp.create({
+    const followup = await LeadActivity.create({
       type,
       description,
       date,
@@ -2535,9 +2535,9 @@ router.post("/listActivity", protectTo, async (req, res) => {
       admin: user_id,
     };
 
-    const totalData = (await LeadFollowUp.countDocuments(condition)) || 0;
+    const totalData = (await LeadActivity.countDocuments(condition)) || 0;
     console.log("totalData", totalData, condition);
-    const lead_g_data = await LeadFollowUp.find(condition)
+    const lead_g_data = await LeadActivity.find(condition)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .sort({ dateAndTime: -1 });
@@ -2578,7 +2578,7 @@ router.post("/listActivity", protectTo, async (req, res) => {
 //       return errorHandler(res, 401, "Not Authorized!");
 //     }
 
-//     const isExist = await LeadFollowUp.findById(id);
+//     const isExist = await LeadActivity.findById(id);
 
 //     if (!isExist) {
 //       return errorHandler(res, 404, "No followup found");
@@ -2615,7 +2615,7 @@ router.post("/listActivity", protectTo, async (req, res) => {
 //     console.log("*********date adn time*********", newDate);
 //     updatingData.dateAndTime = new Date(newDate);
 //     console.log("updatingData", updatingData);
-//     const followUp = await LeadFollowUp.findByIdAndUpdate(
+//     const followUp = await LeadActivity.findByIdAndUpdate(
 //       { _id: id },
 //       updatingData,
 //       { new: true }
