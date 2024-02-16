@@ -33,6 +33,7 @@ const sharp = require("sharp");
 const protectTo = require("../../utils/auth");
 const errorHandler = require("../../utils/errorResponse");
 const ObjectId = require("mongoose/lib/types/objectid");
+const { update } = require("../../models/leadModel");
 
 const imageStorage = multer.diskStorage({
   destination: "images/lead",
@@ -752,17 +753,22 @@ router.post("/get_clients", protectTo, async (req, res) => {
           let city_data = Location.findOne({ id: lead_data[i].city });
           let emp_data = Employee.findById(lead_data[i].assignToEmp);
           let lead_grp_data = LeadGroup.findById(lead_data[i].customer_grp);
-          const currentDate = get_date();
-          var leadfollow_data = LeadFollowUp.find({
-            lead: mongoose.Types.ObjectId(lead_data[i]._id),
-            companyId: emp_data.company_id,
-            date: { $lte: currentDate.split(" ")[0] },
-          }).sort({ date: 1 });
           state_data = await state_data;
           city_data = await city_data;
           emp_data = await emp_data;
           lead_grp_data = await lead_grp_data;
-          leadfollow_data = await leadfollow_data;
+          let status;
+          if (
+            get_date(lead_data[i].next_followup).split(" ")[0] == get_date().split(" ")[0]
+          ) {
+            status = "Today";
+          } else if (
+            get_date(lead_data[i].next_followup).split(" ")[0] > get_date().split(" ")[0]
+          ) {
+            status = "Upcoming";
+          } else {
+            status = "Overdue";
+          }
           var u_data = {
             _id: lead_data[i]._id,
             company_id: lead_data[i].company_id,
@@ -780,9 +786,8 @@ router.post("/get_clients", protectTo, async (req, res) => {
             lead_stage: lead_data[i].lead_stage,
             lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
             createdAt: lead_data[i].createdAt || "NA",
-            last_follow_date: !leadfollow_data.length
-              ? "NA"
-              : leadfollow_data[0].created_date,
+            followup_Status: status,
+            last_follow_date: lead_data[i].next_followup || "NA",
           };
           list.push(u_data);
         }
@@ -813,12 +818,12 @@ router.post("/get_clients", protectTo, async (req, res) => {
             company_id: emp_data.companyId,
             is_delete: "0",
           }),
-          LeadFollowUp.find({
-            is_delete: "0",
-            updatedAt: { $gte: date },
-          })
-            .skip(skip)
-            .limit(limit),
+          // LeadFollowUp.find({
+          //   is_delete: "0",
+          //   updatedAt: { $gte: date },
+          // })
+          //   .skip(skip)
+          //   .limit(limit),
         ]);
         const emp_leads = await Lead.find({
           assignToEmp: emp_data._id,
@@ -941,7 +946,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
           is_delete: "0",
         });
         for (let i = 0; i < team_data.length; i++) {
-          if ((team_data[i]._id).toString() === (emp_data._id).toString()) {
+          if (team_data[i]._id.toString() === emp_data._id.toString()) {
             delete team_data[i];
             continue;
           }
@@ -1159,27 +1164,39 @@ router.get("/leadProfile/:id", protectTo, async (req, res) => {
   if (id === "" || !mongoose.isValidObjectId(id)) {
     return errorHandler(res, 400, "Provide valid id");
   }
-  const isExist = await Lead.findById(id);
+  const isExist = await Lead.findById(id).lean();
   if (!isExist || isExist?.is_delete === "1") {
     return errorHandler(res, 200, "Lead not found!");
   }
 
+  let status;
+  if (
+    get_date(isExist.next_followup).split(" ")[0] == get_date().split(" ")[0]
+  ) {
+    status = "Today";
+  } else if (
+    get_date(isExist.next_followup).split(" ")[0] > get_date().split(" ")[0]
+  ) {
+    status = "Upcoming";
+  } else {
+    status = "Overdue";
+  }
   const groupData = await LeadGroupItem.find({
     lead_id: isExist._id,
     is_delete: "0",
   });
 
-  const followUp = await LeadFollowUp.find({
-    lead: new mongoose.Types.ObjectId(id),
-    is_delete: "0",
-  }).sort({ dateAndTime: 1 });
+  // const followUp = await LeadFollowUp.find({
+  //   lead: new mongoose.Types.ObjectId(id),
+  //   is_delete: "0",
+  // }).sort({ dateAndTime: 1 });
 
   return res.json({
     status: true,
     message: "Data",
     data: {
-      lead: isExist,
-      followUpData: followUp,
+      lead: {...isExist, status},
+      // followUpData: followUp,
       groupData,
     },
   });
@@ -2295,11 +2312,25 @@ router.post("/lead_list", protectTo, async (req, res) => {
           var emp_name = "";
         }
         const currentDate = get_date();
-        var leadfollow_data = await LeadFollowUp.find({
-          lead: lead_data[i]._id,
-          date: { $lte: currentDate.split(" ")[0] },
-          time: { $lte: currentDate.split(" ")[1] },
-        });
+        // var leadfollow_data = await LeadFollowUp.find({
+        //   lead: lead_data[i]._id,
+        //   date: { $lte: currentDate.split(" ")[0] },
+        //   time: { $lte: currentDate.split(" ")[1] },
+        // });
+        let status;
+        if (
+          get_date(rowData.next_followup).split(" ")[0] ==
+          get_date().split(" ")[0]
+        ) {
+          status = "Today";
+        } else if (
+          get_date(rowData.next_followup).split(" ")[0] >
+          get_date().split(" ")[0]
+        ) {
+          status = "Upcoming";
+        } else {
+          status = "Overdue";
+        }
         var u_data = {
           _id: lead._id,
           admin_id: lead.admin_id,
@@ -2309,12 +2340,11 @@ router.post("/lead_list", protectTo, async (req, res) => {
           email: lead.email,
           pincode: lead.pincode,
           state: lead.state,
-          last_follow_date: leadfollow_data
-            ? leadfollow_data.created_date
-            : "N/A",
+          last_follow_date: lead.last_follow_up || "N/A",
           sate_name: sate_name ?? "",
           city_name: city_name ?? "",
           emp_name: emp_name ?? "",
+          followup_Status: status || "N/A",
           city: lead.city,
           leadSource: lead.leadSource,
           addBy: lead.addBy,
@@ -2399,7 +2429,7 @@ router.get("/sharedHistory/:id", protectTo, async (req, res) => {
 });
 
 // FOLLOW_UP SUB-MODULE
-router.post("/followUp", protectTo, async (req, res) => {
+router.post("/activity", protectTo, async (req, res) => {
   try {
     let { type = "", description = "", date = "", leadId = "" } = req.body;
     console.log("******", req.loggedInUser.user_id);
@@ -2480,7 +2510,7 @@ router.post("/followUp", protectTo, async (req, res) => {
   }
 });
 
-router.post("/listFollowUp", protectTo, async (req, res) => {
+router.post("/listActivity", protectTo, async (req, res) => {
   try {
     let { leadId = "", page = 1, limit = 20 } = req.body;
     if (!leadId) {
@@ -2527,80 +2557,141 @@ router.post("/listFollowUp", protectTo, async (req, res) => {
   }
 });
 
+// router.put("/followUp", protectTo, async (req, res) => {
+//   try {
+//     console.log("body", req.body);
+//     let {
+//       type = "",
+//       description = "",
+//       date = "",
+//       time = "",
+//       id = "",
+//     } = req.body;
+//     const user_id = req.loggedInUser.user_id;
+
+//     console.log("type description", type, description);
+//     if (!id || !mongoose.isValidObjectId(id)) {
+//       return errorHandler(res, 400, "provide valid activity id!");
+//     }
+//     const emp_data = await Employee.findById({ _id: user_id });
+//     if (!emp_data || emp_data.is_deleted == "1") {
+//       return errorHandler(res, 401, "Not Authorized!");
+//     }
+
+//     const isExist = await LeadFollowUp.findById(id);
+
+//     if (!isExist) {
+//       return errorHandler(res, 404, "No followup found");
+//     }
+
+//     let updatingData = {};
+//     updatingData.admin = user_id;
+//     updatingData.Updated_date = get_current_date();
+
+//     if (type) {
+//       type = type.toUpperCase();
+//       if (!["PHONE", "NOTE", "MEETING", "MESSAGE"].includes(type)) {
+//         return res.status(401).json({
+//           status: false,
+//           message: "Please provide valid type",
+//         });
+//       }
+//       updatingData.type = type;
+//     }
+//     if (description) {
+//       updatingData.description = description.trim();
+//     }
+//     console.log("*****date.split[1]***", date.split(" ")[1]);
+//     if (date) {
+//       updatingData.date = date.split(" ")[0];
+//       if (date.split(" ")[1]) {
+//         updatingData.time = date.split(" ")[1];
+//       } else {
+//         updatingData.time = isExist.time;
+//       }
+//     }
+
+//     const newDate = updatingData.date + " " + updatingData.time;
+//     console.log("*********date adn time*********", newDate);
+//     updatingData.dateAndTime = new Date(newDate);
+//     console.log("updatingData", updatingData);
+//     const followUp = await LeadFollowUp.findByIdAndUpdate(
+//       { _id: id },
+//       updatingData,
+//       { new: true }
+//     );
+
+//     console.log("updated followUp", followUp);
+//     if (!followUp) {
+//       return errorHandler(res, 400, "Please provide valid id!");
+//     }
+//     return res.status(200).json({
+//       status: true,
+//       message: "Update successfully",
+//       results: followUp,
+//     });
+//   } catch (error) {
+//     return res.json({
+//       status: false,
+//       message: error.message,
+//     });
+//   }
+// });
+
 router.put("/followUp", protectTo, async (req, res) => {
   try {
-    console.log("body", req.body);
-    let {
-      type = "",
-      description = "",
-      date = "",
-      time = "",
-      id = "",
-    } = req.body;
     const user_id = req.loggedInUser.user_id;
-
-    console.log("type description", type, description);
-    if (!id || !mongoose.isValidObjectId(id)) {
-      return errorHandler(res, 400, "provide valid followup id!");
+    let { date, leadId } = req.body;
+    if (!leadId || !date || !mongoose.isValidObjectId(leadId)) {
+      return res.status(401).json({
+        status: false,
+        message: "lead_id and date require !",
+      });
     }
     const emp_data = await Employee.findById({ _id: user_id });
-    if (!emp_data || emp_data.is_deleted == "1") {
+    if (!emp_data) {
       return errorHandler(res, 401, "Not Authorized!");
     }
-
-    const isExist = await LeadFollowUp.findById(id);
-
-    if (!isExist) {
-      return errorHandler(res, 404, "No followup found");
+    date = new Date(date);
+    if (date == "Invalid Date") {
+      date = new Date();
     }
+    // const dateAndTime = date;
+    // time = date.split(" ")[1];
+    // date = date.split(" ")[0];
 
-    let updatingData = {};
-    updatingData.admin = user_id;
-    updatingData.Updated_date = get_current_date();
-
-    if (type) {
-      type = type.toUpperCase();
-      if (!["PHONE", "NOTE", "MEETING", "MESSAGE"].includes(type)) {
-        return res.status(401).json({
-          status: false,
-          message: "Please provide valid type",
-        });
-      }
-      updatingData.type = type;
+    const leadData = await Lead.findOne({
+      _id: new mongoose.Schema.ObjectId(leadId),
+      assignToEmp: user_id,
+    });
+    if (!leadData) {
+      return errorHandler(res, 200, "Lead not found!");
     }
-    if (description) {
-      updatingData.description = description.trim();
-    }
-    console.log("*****date.split[1]***", date.split(" ")[1]);
-    if (date) {
-      updatingData.date = date.split(" ")[0];
-      if (date.split(" ")[1]) {
-        updatingData.time = date.split(" ")[1];
-      } else {
-        updatingData.time = isExist.time;
-      }
-    }
-
-    const newDate = updatingData.date + " " + updatingData.time;
-    console.log("*********date adn time*********", newDate);
-    updatingData.dateAndTime = new Date(newDate);
-    console.log("updatingData", updatingData);
-    const followUp = await LeadFollowUp.findByIdAndUpdate(
-      { _id: id },
-      updatingData,
+    const updateFollowup = await Lead.findByIdAndUpdate(
+      leadId,
+      { next_followup: date, last_followup: leadData.next_followup },
       { new: true }
     );
-
-    console.log("updated followUp", followUp);
-    if (!followUp) {
-      return errorHandler(res, 400, "Please provide valid id!");
+    if (!updateFollowup) {
+      return errorHandler(res, 403, "FollowUp not updated!");
     }
-    return res.status(200).json({
+    console.log("followUp", {
+      after: {
+        next_followup: updateFollowup.next_followup,
+        last_followup: updateFollowup.last_followup,
+      },
+      before: {
+        next_followup: leadData.next_followup,
+        last_followup: leadData.last_followup,
+      },
+    });
+    return res.status(201).json({
       status: true,
-      message: "Update successfully",
-      results: followUp,
+      message: "followUp updated successfully!",
+      date: updateFollowup,
     });
   } catch (error) {
+    console.log("error", error);
     return res.json({
       status: false,
       message: error.message,
@@ -2618,10 +2709,8 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
       emp_id = "",
     } = req.body;
 
-    const currentDate = get_date().split(" ")[0];
-    const upcomingDate = get_date(
-      new Date(Date.now() + 7 * 24 * 3600 * 1000)
-    ).split(" ")[0];
+    const currentDate = Date.now();
+    const upcomingDate = Date.now() + 7 * 24 * 3600 * 1000;
     if (emp_id === "") {
       emp_id = req.loggedInUser.user_id;
     }
@@ -2635,38 +2724,57 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
     let data = [];
     let count = 0;
     key = key?.trim().toUpperCase();
-    console.log("*********key***********", key);
+    console.log(
+      "*********key***********",
+      key,
+      currentDate,
+      upcomingDate,
+      emp_data._id,
+      new Date(new Date(currentDate).setHours(0, 0, 0)),
+      new Date(new Date(currentDate).setHours(23, 59, 59))
+    );
     if (key === "ALL") {
       const assign_lead = await Lead.find({
+        is_delete: "0",
         assignToEmp: emp_data._id,
       });
       let overdue = await Promise.all(
         assign_lead.map((lead) => {
-          return LeadFollowUp.find({
-            lead: mongoose.Types.ObjectId(lead._id),
-            date: { $lt: `${currentDate}` },
+          return Lead.find({
+            _id: lead._id,
+            next_followup: {
+              $lt: new Date(new Date(currentDate).setHours(0, 0, 0)),
+            },
           });
         })
       );
       let upcoming = await Promise.all(
         assign_lead.map((lead) => {
-          return LeadFollowUp.find({
-            lead: mongoose.Types.ObjectId(lead._id),
-            date: { $gt: `${currentDate}`, $lt: `${upcomingDate}` },
+          return Lead.find({
+            _id: lead._id,
+            next_followup: {
+              $gt: new Date(new Date(currentDate).setHours(23, 59, 59)),
+              $lt: upcomingDate,
+            },
           });
         })
       );
       let today = await Promise.all(
         assign_lead.map((lead) => {
-          return LeadFollowUp.find({
-            lead: mongoose.Types.ObjectId(lead._id),
-            date: { $eq: `${currentDate}` },
+          return Lead.find({
+            _id: lead._id,
+            next_followup: {
+              $lt: new Date(new Date(currentDate).setHours(23, 59, 59)),
+              $gt: new Date(new Date(currentDate).setHours(0, 0, 0)),
+            },
           });
         })
       );
       overdue = overdue.flat(1);
       upcoming = upcoming.flat(1);
       today = today.flat(1);
+      console.log("overdue", overdue);
+      console.log("upcoming", upcoming);
       return res.json({
         status: true,
         data: {
@@ -2681,10 +2789,6 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
       data = await Lead.find({ is_delete: "0", assignToEmp: emp_data._id })
         .skip(skip)
         .limit(limit);
-      count = await Lead.countDocuments({
-        is_delete: "0",
-        assignToEmp: emp_data._id,
-      });
     } else {
       const leadData = await Lead.find({
         is_delete: "0",
@@ -2695,39 +2799,44 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
       if (key === "OVERDUE") {
         filtered = "OVERDUE";
         data = await Promise.all(
-          leadData.map(async function (lead) {
-            return LeadFollowUp.find({
-              lead: mongoose.Types.ObjectId(lead._id),
-              company_id: emp_data.companyId,
-              date: { $lt: `${currentDate}` },
-            }).populate("lead");
+          leadData.map((lead) => {
+            return Lead.find({
+              _id: lead._id,
+              next_followup: {
+                $lt: new Date(new Date(currentDate).setHours(0, 0, 0)),
+              },
+            });
           })
         );
-        data = data.filter((subArray) => subArray.length > 0);
+        // data = data.filter((subArray) => subArray.length > 0);
       } else if (key === "TODAY") {
         filtered = "TODAY";
         data = await Promise.all(
           leadData.map((lead) => {
-            return LeadFollowUp.find({
-              lead: mongoose.Types.ObjectId(lead._id),
-              company_id: emp_data.companyId,
-              date: { $eq: `${currentDate}` },
-            }).populate("lead");
+            return Lead.find({
+              _id: lead._id,
+              next_followup: {
+                $lt: new Date(new Date(currentDate).setHours(23, 59, 59)),
+                $gt: new Date(new Date(currentDate).setHours(0, 0, 0)),
+              },
+            });
           })
         );
-        data = data.filter((subArray) => subArray.length > 0);
+        // data = data.filter((subArray) => subArray.length > 0);
       } else if (key === "UPCOMING") {
         filtered = "UPCOMING";
         data = await Promise.all(
           leadData.map((lead) => {
-            return LeadFollowUp.find({
-              lead: mongoose.Types.ObjectId(lead._id),
-              company_id: emp_data.companyId,
-              date: { $gt: `${currentDate}`, $lt: `${upcomingDate}` },
-            }).populate("lead");
+            return Lead.find({
+              _id: lead._id,
+              next_followup: {
+                $gt: new Date(new Date(currentDate).setHours(23, 59, 59)),
+                $lt: upcomingDate,
+              },
+            });
           })
         );
-        data = data.filter((subArray) => subArray.length > 0);
+        // data = data.filter((subArray) => subArray.length > 0);
       } else {
         return errorHandler(res, 400, "Please provide valid key");
       }
@@ -2737,7 +2846,7 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
           message: "Data Not Found!",
         });
       }
-      let list = [];
+      // let list = [];
       // data.forEach(ele=>{
       //   ele.forEach()
       // })
@@ -2748,7 +2857,7 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
         status: true,
         message: "Data Found",
         filtered,
-        pageLength: Math.ceil(count / limit),
+        pageLength: Math.ceil(data.length / limit),
         count: data.length,
         data,
       });
@@ -2763,8 +2872,8 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
       status: true,
       message: "Data Found",
       filtered,
-      pageLength: Math.ceil(count / limit),
-      count,
+      pageLength: Math.ceil(data.length / limit),
+      count: data.length,
       data,
     });
   } catch (error) {

@@ -171,9 +171,18 @@ router.post("/lead_list", protectTo, async (req, res) => {
                   } else {
                     var emp_name = "";
                   }
-                  var leadfollow_data = await LeadFollowUp.findOne({
-                    lead_id: rowData._id,
-                  });
+                  // var leadfollow_data = await LeadFollowUp.findOne({
+                  //   lead_id: rowData._id,
+                  // });
+                  console.log("date compare", get_date(rowData.next_followup).split(" ")[0], get_date().split(" ")[0])
+                  let status;
+                  if (get_date(rowData.next_followup).split(" ")[0] == get_date().split(" ")[0]){
+                     status = "Today"
+                  } else if (get_date(rowData.next_followup).split(" ")[0] > get_date().split(" ")[0] ){
+                    status = "Upcoming"
+                  } else {
+                    status = "Overdue"
+                  }
                   var u_data = {
                     _id: rowData._id,
                     admin_id: rowData.admin_id,
@@ -183,9 +192,9 @@ router.post("/lead_list", protectTo, async (req, res) => {
                     email: rowData.email,
                     pincode: rowData.pincode,
                     state: rowData.state,
-                    last_follow_date: leadfollow_data
-                      ? leadfollow_data.Created_date
-                      : "",
+                    last_follow_date: rowData.last_followup || "",
+                    next_follow_date: rowData.next_followup || "",
+                    followup_Status: status || "N/A" ,
                     sate_name: sate_name ?? "",
                     city_name: city_name ?? "",
                     emp_name: emp_name ?? "",
@@ -1365,13 +1374,13 @@ router.post("/get_clients", protectTo, async (req, res) => {
       });
       let emp_data = await Employee.findById(lead_data[i].assignToEmp);
       let lead_grp_data = await LeadGroup.findById(lead_data[i].customer_grp);
-      const currentDate = get_date();
-      var leadfollow_data = await LeadFollowUp.find({
-        lead: lead_data[i]._id,
-        date: { $lte: currentDate.split(" ")[0] },
-        time: { $lte: currentDate.split(" ")[1] },
-      });
-      console.log("***********leadFollowUpDate**********", leadfollow_data);
+      // const currentDate = get_date();
+      // var leadfollow_data = await LeadFollowUp.find({
+      //   lead: lead_data[i]._id,
+      //   date: { $lte: currentDate.split(" ")[0] },
+      //   time: { $lte: currentDate.split(" ")[1] },
+      // });
+      console.log("***********leadFollowUpDate**********", lead_data[i].last_followup);
       var u_data = {
         _id: lead_data[i]._id,
         company_id: lead_data[i].company_id,
@@ -1386,9 +1395,7 @@ router.post("/get_clients", protectTo, async (req, res) => {
         lead_potential: lead_data[i].lead_potential,
         lead_stage: lead_data[i].lead_stage,
         lead_grp: lead_grp_data ? lead_grp_data.grp_name : "NA",
-        last_follow_date: !leadfollow_data.length
-          ? "NA"
-          : leadfollow_data[0].created_date,
+        last_follow_date: lead_data[i].last_followup || "NA",
         displayName: lead_data[i].displayName,
         email: lead_data[i].email,
         pincode: lead_data[i].pincode,
@@ -1423,10 +1430,13 @@ router.post("/get_clients", protectTo, async (req, res) => {
         company_id: user_id,
         is_delete: "0",
       }),
-      LeadFollowUp.find({
-        is_delete: "0",
-        updatedAt: { $gte: date },
-      }, {type:1, description:1, date:1, time:1, lead:1})
+      LeadFollowUp.find(
+        {
+          is_delete: "0",
+          updatedAt: { $gte: date },
+        },
+        { type: 1, description: 1, date: 1, time: 1, lead: 1 }
+      )
         .skip(skip)
         .limit(limit),
     ]);
@@ -3269,8 +3279,8 @@ router.get("/sharedHistory/:id", protectTo, async (req, res) => {
   }
 });
 
-// FOLLOW_UP SUB-MODULE
-router.post("/followUp", protectTo, async (req, res) => {
+// Activity SUB-MODULE
+router.post("/activity", protectTo, async (req, res) => {
   try {
     const user_id = req.loggedInUser.user_id;
     let time = "";
@@ -3345,6 +3355,64 @@ router.post("/followUp", protectTo, async (req, res) => {
   }
 });
 
+router.put("/followUp", protectTo, async (req, res) => {
+  try {
+    const user_id = req.loggedInUser.user_id;
+    let { date, leadId } = req.body;
+    if (!leadId || !date || !mongoose.isValidObjectId(leadId)) {
+      return res.status(401).json({
+        status: false,
+        message: "lead_id and date require !",
+      });
+    }
+    const admin = await Admin.findById({ _id: user_id });
+    if (!admin) {
+      return errorHandler(res, 401, "Not Authorized!");
+    }
+    date = new Date(date);
+    if (date == "Invalid Date") {
+      date = new Date();
+    }
+    // const dateAndTime = date;
+    // time = date.split(" ")[1];
+    // date = date.split(" ")[0];
+
+    const leadData = await Lead.findById(leadId);
+    if (!leadData) {
+      return errorHandler(res, 200, "Lead not found!");
+    }
+    const updateFollowup = await Lead.findByIdAndUpdate(
+      leadId,
+      { next_followup: date, last_followup: leadData.next_followup },
+      { new: true }
+    );
+    if (!updateFollowup) {
+      return errorHandler(res, 403, "FollowUp not updated!");
+    }
+    console.log("followUp", {
+      after: {
+        next_followup: updateFollowup.next_followup,
+        last_followup: updateFollowup.last_followup,
+      },
+      before: {
+        next_followup: leadData.next_followup,
+        last_followup: leadData.last_followup,
+      },
+    });
+    return res.status(201).json({
+      status: true,
+      message: "followUp updated successfully!",
+      date: updateFollowup
+    });
+  } catch (error) {
+    console.log("error", error);
+    return res.json({
+      status: false,
+      message: error.message,
+    });
+  }
+});
+
 router.post("/listFollowUp", protectTo, async (req, res) => {
   try {
     let { leadId = "", page = 1, limit = 20 } = req.body;
@@ -3394,165 +3462,150 @@ router.post("/listFollowUp", protectTo, async (req, res) => {
   }
 });
 
-router.put("/followUp", protectTo, async (req, res) => {
-  try {
-    console.log("body", req.body);
-    let { type = "", description = "", date = "", id = "" } = req.body;
+// router.put("/activity", protectTo, async (req, res) => {
+//   try {
+//     console.log("body", req.body);
+//     let { type = "", description = "", date = "", id = "" } = req.body;
 
-    console.log("type description", type, description);
-    if (!id) {
-      return res.json({
-        status: false,
-        message: "followUp id require !",
-      });
-    }
-    var user_id = req.loggedInUser.user_id;
-    const admin = await Admin.findOne({ _id: user_id, is_deleted: "0" });
-    if (!admin) {
-      return res.status(401).json({
-        status: false,
-        message: "User not found !",
-      });
-    }
-    let updatingData = {};
-    updatingData.Updated_date = get_current_date();
-    if (type) {
-      type = type.toUpperCase();
-      if (!["PHONE", "NOTE", "MEETING", "MESSAGE"].includes(type)) {
-        return res.status(401).json({
-          status: false,
-          message: "Please provide valid type",
-        });
-      }
-      updatingData.type = type;
-    }
-    const isExist = await LeadFollowUp.findById(id);
+//     console.log("type description", type, description);
+//     if (!id) {
+//       return res.json({
+//         status: false,
+//         message: "followUp id require !",
+//       });
+//     }
+//     var user_id = req.loggedInUser.user_id;
+//     const admin = await Admin.findOne({ _id: user_id, is_deleted: "0" });
+//     if (!admin) {
+//       return res.status(401).json({
+//         status: false,
+//         message: "User not found !",
+//       });
+//     }
+//     let updatingData = {};
+//     updatingData.Updated_date = get_current_date();
+//     if (type) {
+//       type = type.toUpperCase();
+//       if (!["PHONE", "NOTE", "MEETING", "MESSAGE"].includes(type)) {
+//         return res.status(401).json({
+//           status: false,
+//           message: "Please provide valid type",
+//         });
+//       }
+//       updatingData.type = type;
+//     }
+//     const isExist = await LeadFollowUp.findById(id);
 
-    if (!isExist) {
-      return errorHandler(res, 404, "No followup found");
-    }
-    if (description) {
-      updatingData.description = description.trim();
-    }
+//     if (!isExist) {
+//       return errorHandler(res, 404, "No followup found");
+//     }
+//     if (description) {
+//       updatingData.description = description.trim();
+//     }
 
-    if (date) {
-      date = get_date(new Date(date));
-      updatingData.date = date.split(" ")[0].split("/").join("-");
-      if (date.split(" ")[1]) {
-        updatingData.time = date.split(" ")[1];
-      }
-    }
-    const newDate = updatingData.date + " " + updatingData.time;
-    console.log("*********date adn time*********", newDate);
-    updatingData.dateAndTime = new Date(newDate);
+//     if (date) {
+//       date = get_date(new Date(date));
+//       updatingData.date = date.split(" ")[0].split("/").join("-");
+//       if (date.split(" ")[1]) {
+//         updatingData.time = date.split(" ")[1];
+//       }
+//     }
+//     const newDate = updatingData.date + " " + updatingData.time;
+//     console.log("*********date adn time*********", newDate);
+//     updatingData.dateAndTime = new Date(newDate);
 
-    console.log("updatingData", updatingData);
-    const followUp = await LeadFollowUp.findByIdAndUpdate(
-      { _id: id },
-      updatingData,
-      { new: true }
-    );
-    console.log("updated followUp", followUp);
-    if (!followUp) {
-      return res.status(400).json({
-        status: true,
-        message: "Please provide valid id!",
-      });
-    }
-    return res.status(200).json({
-      status: true,
-      message: "Update successfully",
-      results: followUp,
-    });
-  } catch (error) {
-    return res.json({
-      status: false,
-      message: error.message,
-    });
-  }
-});
+//     console.log("updatingData", updatingData);
+//     const followUp = await LeadFollowUp.findByIdAndUpdate(
+//       { _id: id },
+//       updatingData,
+//       { new: true }
+//     );
+//     console.log("updated followUp", followUp);
+//     if (!followUp) {
+//       return res.status(400).json({
+//         status: true,
+//         message: "Please provide valid id!",
+//       });
+//     }
+//     return res.status(200).json({
+//       status: true,
+//       message: "Update successfully",
+//       results: followUp,
+//     });
+//   } catch (error) {
+//     return res.json({
+//       status: false,
+//       message: error.message,
+//     });
+//   }
+// });
 
 router.post("/listFollowUpLogs", protectTo, async (req, res) => {
   try {
     let { limit = 10, skip = 0, key = "ALL", filtered = "ALL" } = req.body;
     const company_id = req.loggedInUser.user_id;
-    const currentDate = get_date().split(" ")[0];
-    const upcomingDate = get_date(
-      new Date(Date.now() + 7 * 24 * 3600 * 1000)
-    ).split(" ")[0];
+    const currentDate = new Date(Date.now());
+    const upcomingDate = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+    console.log("date", currentDate, upcomingDate)
     let data = [];
     let count = 0;
     key = key?.trim().toUpperCase();
-    console.log("*********key***********", key);
     switch (key) {
       case "LEADS":
         filtered = "LEADS";
         data = await Lead.find({ company_id, is_delete: "0" })
           .skip(skip)
           .limit(limit);
-        count = await Lead.countDocuments({ company_id, is_delete: "0" });
         break;
       case "OVERDUE":
         filtered = "OVERDUE";
-        data = await LeadFollowUp.find({
+        data = await Lead.find({
           company_id,
-          date: { $lt: `${currentDate}` },
+          next_followup: { $lt: currentDate },
         })
           .skip(skip)
-          .limit(limit)
-          .populate("lead");
-        count = await LeadFollowUp.countDocuments({
-          company_id,
-          date: { $lt: `${currentDate}` },
-        });
+          .limit(limit);
         break;
       case "TODAY":
         filtered = "TODAY";
-        data = await LeadFollowUp.find({
+        data = await Lead.find({
           company_id,
-          date: { $eq: `${currentDate}` },
+          next_followup: { $eq: currentDate },
         })
           .skip(skip)
-          .limit(limit)
-          .populate("lead");
-        count = await LeadFollowUp.countDocuments({
-          company_id,
-          date: { $eq: `${currentDate}` },
-        });
+          .limit(limit);
         break;
       case "UPCOMING":
         filtered = "UPCOMING";
-        data = await LeadFollowUp.find({
+        data = await Lead.find({
           company_id,
-          date: { $gt: `${currentDate}`, $lt: `${upcomingDate}` },
+          next_followup: {
+            $gt: currentDate,
+            $lt: upcomingDate,
+          },
         })
           .skip(skip)
-          .limit(limit)
-          .populate("lead");
-        count = await LeadFollowUp.countDocuments({
-          company_id,
-          date: { $gt: `${currentDate}`, $lt: `${upcomingDate}` },
-        });
+          .limit(limit);
         break;
       case "ALL":
-        data = await LeadFollowUp.aggregate([
+        data = await Lead.aggregate([
           {
             $match: { company_id },
           },
-          {
-            $lookup: {
-              from: "leads",
-              localField: "lead",
-              foreignField: "_id",
-              as: "lead",
-            },
-          },
+          // {
+          //   $lookup: {
+          //     from: "leads",
+          //     localField: "lead",
+          //     foreignField: "_id",
+          //     as: "lead",
+          //   },
+          // },
           {
             $facet: {
               overdue: [
                 {
                   $match: {
-                    date: { $lt: `${currentDate}` },
+                    next_followup: { $lt: currentDate },
                   },
                 },
                 {
@@ -3562,7 +3615,10 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
               upcoming: [
                 {
                   $match: {
-                    date: { $gt: `${currentDate}`, $lt: `${upcomingDate}` },
+                    next_followup: {
+                      $gt: currentDate,
+                      $lt: upcomingDate,
+                    },
                   },
                 },
                 {
@@ -3572,7 +3628,7 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
               today: [
                 {
                   $match: {
-                    date: { $eq: `${currentDate}` },
+                    next_followup: { $eq: currentDate },
                   },
                 },
                 {
@@ -3610,6 +3666,7 @@ router.post("/listFollowUpLogs", protectTo, async (req, res) => {
         message: "Data not found!",
       });
     } else {
+      count = data.length;
       return res.json({
         status: true,
         message: "Data Found",

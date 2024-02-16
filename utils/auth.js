@@ -1,4 +1,7 @@
+const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
+const Admin = mongoose.model("AdminInfo");
+const Employee = mongoose.model("Employee");
 
 module.exports = async function protectTo(req, res, next) {
   const authHeader = req.headers["authorization"];
@@ -10,5 +13,9 @@ module.exports = async function protectTo(req, res, next) {
     });
   }
   req.loggedInUser = await jwt.verify(token, "test");
+  // if(req.originalUrl.startsWith("/app_api")){
+    
+  // }
+  // console.log("loggedInUser", req.loggedInUser, req.originalUrl.startsWith("/app_api") );
   next();
 };

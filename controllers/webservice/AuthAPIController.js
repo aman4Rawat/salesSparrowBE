@@ -247,7 +247,7 @@ router.post('/adminLogin', (req, res) => {
         if (admin_data) {
           // bcrypt.compare(password, admin_data.password, function (err, result) {
           // if (result) {
-          const token = jwt.sign({ user_id: admin_data._id, is_token_valide: 1 }, "test");
+          const token = jwt.sign({ user_id: admin_data._id, is_token_valid: 1 }, "test");
           res.json({
             status: true,
             message: "Login Successful",
